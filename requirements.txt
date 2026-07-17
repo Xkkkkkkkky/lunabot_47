@@ -11,15 +11,12 @@ openai
 pandas
 httpx
 aiohttp
+beautifulsoup4
 wordcloud
 aiosmtplib
 mail
-mcrcon
 ascii_magic
-PicImageSearch
 aiorpcx
-asteval
-yt-dlp
 imageio[ffmpeg]
 pilmoji[requests]
 zhon

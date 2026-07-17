@@ -621,9 +621,9 @@ async def get_detailed_profile(
 
         # 尝试下载
         try:   
-            url = url.format(uid=uid) + f"?mode={mode}"
+            url = url.format(uid=uid)
             if filter:
-                url += f"&filter={','.join(filter)}"
+                url += f"?key={','.join(filter)}"
             profile = await request_gameapi(url)
         except HttpError as e:
             logger.info(f"获取 {qid} {ctx.region} {uid} 抓包数据失败: {get_exc_desc(e)}")
@@ -1157,7 +1157,7 @@ async def _(ctx: SekaiHandlerContext):
     if not args:
         has_any = False
         msg = ""
-        for region in ALL_SERVER_REGIONS:
+        for region in ENABLED_SERVER_REGIONS:
             region_ctx = SekaiHandlerContext.from_region(region)
             main_uid = get_player_bind_id(region_ctx, ctx.user_id, check_bind=False)
 
@@ -1208,7 +1208,7 @@ async def _(ctx: SekaiHandlerContext):
             logger.warning(f"在 {region} 服务器尝试绑定失败: {get_exc_desc(e)}")
             return region, None, "内部错误，请稍后重试"
         
-    check_results = await asyncio.gather(*[check_bind(region) for region in ALL_SERVER_REGIONS])
+    check_results = await asyncio.gather(*[check_bind(region) for region in ENABLED_SERVER_REGIONS])
     check_results = [res for res in check_results if res]
     ok_check_results = [res for res in check_results if res[2] is None]
 
@@ -1251,7 +1251,7 @@ async def _(ctx: SekaiHandlerContext):
 
     # 如果以前没有绑定过其他区服，设置默认服务器
     other_bind = None
-    for r in ALL_SERVER_REGIONS:
+    for r in ENABLED_SERVER_REGIONS:
         if r == region: continue
         other_bind = other_bind or get_player_bind_id(SekaiHandlerContext.from_region(r), ctx.user_id, check_bind=False)
     default_region = get_user_default_region(ctx.user_id, None)
@@ -1841,7 +1841,7 @@ async def _(ctx: HandlerContext):
     msg = "所有群聊统计:\n" if not group_mode else "当前群聊统计:\n"
     group_qids = set([str(m['user_id']) for m in await get_group_users(ctx.bot, ctx.group_id)])
 
-    for region in ALL_SERVER_REGIONS:
+    for region in ENABLED_SERVER_REGIONS:
         qids = set(bind_list.get(region, {}).keys())
         uids = set()
         if group_mode:
@@ -1899,7 +1899,7 @@ pjsk_bind_history.check_cdrate(cd).check_wblist(gbl).check_superuser()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
     uid = None
-    for region in ALL_SERVER_REGIONS:
+    for region in ENABLED_SERVER_REGIONS:
         if validate_uid(SekaiHandlerContext.from_region(region), args):
             uid = args
             break
@@ -1915,7 +1915,7 @@ async def _(ctx: HandlerContext):
         # 游戏ID查QQ号
         has_any = False
         msg = f"当前绑定游戏ID{uid}的QQ用户:\n"
-        for region in ALL_SERVER_REGIONS:
+        for region in ENABLED_SERVER_REGIONS:
             bind_list: Dict[str, str | list[str]] = profile_db.get("bind_list", {}).get(region, {})
             for qid, items in bind_list.items():
                 if uid in to_list(items):
@@ -1939,7 +1939,7 @@ async def _(ctx: HandlerContext):
         # QQ号查游戏ID
         has_any = False
         msg = f"用户{qid}当前绑定:\n"
-        for region in ALL_SERVER_REGIONS:
+        for region in ENABLED_SERVER_REGIONS:
             region_ctx = SekaiHandlerContext.from_region(region)
             main_uid = get_player_bind_id(region_ctx, qid, check_bind=False)
             lines = []
@@ -1972,7 +1972,7 @@ async def _(ctx: HandlerContext):
 # 创建游客账号
 pjsk_create_guest_account = SekaiCmdHandler([
     "/pjsk create guest", "/pjsk register", "/pjsk注册",
-], regions=['jp', 'en'])
+], regions=['jp', 'en'], disabled=not config.get('features.create_account', True))
 guest_account_create_rate_limit = RateLimit(file_db, logger, 2, 'd', rate_limit_name='注册游客账号')
 pjsk_create_guest_account.check_cdrate(cd).check_wblist(gbl).check_cdrate(guest_account_create_rate_limit)
 @pjsk_create_guest_account.handle()

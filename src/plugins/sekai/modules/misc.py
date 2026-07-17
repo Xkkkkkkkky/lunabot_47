@@ -23,8 +23,9 @@ from .card import (
 )
 
 
-md_update_group_sub = SekaiGroupSubHelper("update", "MasterData更新通知", ALL_SERVER_REGIONS)
-ad_result_sub = SekaiUserSubHelper("ad", "广告奖励推送", ['jp'], hide=True)
+md_update_group_sub = SekaiGroupSubHelper("update", "MasterData更新通知", ENABLED_SERVER_REGIONS)
+AD_RESULT_ENABLED = config.get('features.ad_result', True)
+ad_result_sub = SekaiUserSubHelper("ad", "广告奖励推送", ['jp'] if AD_RESULT_ENABLED else [], hide=True)
 
 
 # ======================= 指令处理 ======================= #
@@ -245,7 +246,7 @@ async def _(ctx: SekaiHandlerContext):
         
             with HSplit().set_sep(16).set_padding(16).set_content_align('c').set_item_align('c'):
                 ImageBox(await get_character_sd_image(cid), size=(None, 80), shadow=True)
-                title_img = await SekaiHandlerContext.from_region("jp").rip.img(f"character/label_horizontal/chr_h_lb_{cid}.png")
+                title_img = await SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION).rip.img(f"character/label_horizontal/chr_h_lb_{cid}.png")
                 ImageBox(title_img, size=(None, 60))
                 TextBox(f"{month}月{day}日", 
                         TextStyle(DEFAULT_HEAVY_FONT, 32, (100, 100, 100), 
@@ -346,7 +347,9 @@ async def send_masterdata_update_notify(
 # 广告奖励推送
 @repeat_with_interval(5, '广告奖励推送', logger)
 async def msr_auto_push():
-    for region in ALL_SERVER_REGIONS:
+    if not AD_RESULT_ENABLED:
+        return
+    for region in ENABLED_SERVER_REGIONS:
         region_name = get_region_name(region)
         ctx = SekaiHandlerContext.from_region(region)
 

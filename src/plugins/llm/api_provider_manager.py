@@ -5,6 +5,8 @@ from ..llm.api_providers.openrouter import OpenrouterApiProvider
 from ..llm.api_providers.siliconflow import SiliconflowApiProvider
 from ..llm.api_providers.google import GoogleApiProvider
 from ..llm.api_providers.new_api import NewApiApiProvider
+from ..llm.api_providers.deepseek import DeepseekApiProvider
+from ..llm.api_providers.mimo import MimoApiProvider
 from typing import Tuple
 
 
@@ -157,4 +159,6 @@ api_provider_mgr = ApiProviderManager([
     SiliconflowApiProvider(),
     GoogleApiProvider(),
     NewApiApiProvider(),
+    DeepseekApiProvider(),
+    MimoApiProvider(),
 ])

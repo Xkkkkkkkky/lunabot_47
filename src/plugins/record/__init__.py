@@ -7,7 +7,7 @@ from .sql import *
 config = Config('record')
 logger = get_logger("Record")
 file_db = get_file_db("data/record/db.json", logger)
-gbl = get_group_black_list(file_db, logger, "record")
+gwl = get_group_white_list(file_db, logger, "record")
 cd = ColdDown(file_db, logger)
 
 record_msg_gbl = get_group_black_list(file_db, logger, "record_msg", is_service=False)
@@ -130,7 +130,7 @@ async def insert_msg_task():
 add = on_message(block=False, priority=-1)
 @add.handle()
 async def _(bot: Bot, event: MessageEvent):
-    if not gbl.check(event, allow_private=True, allow_super=False): return
+    if not gwl.check(event, allow_private=True, allow_super=False): return
     await record_message(bot, event)
     
 
@@ -148,7 +148,7 @@ async def _(ctx: HandlerContext):
 
 # 获取用户在群聊中用过的昵称
 check = CmdHandler(["/nickname"], logger)
-check.check_wblist(gbl).check_cdrate(cd)
+check.check_wblist(gwl).check_cdrate(cd)
 @check.handle()
 async def _(ctx: HandlerContext):
     user_id = None
@@ -268,7 +268,7 @@ async def _(ctx: HandlerContext):
 
 # 聊天记录转文本
 forward_to_text = CmdHandler(["/转文本", "/to_text"], logger)
-forward_to_text.check_wblist(gbl).check_cdrate(cd)
+forward_to_text.check_wblist(gwl).check_cdrate(cd)
 @forward_to_text.handle()
 async def _(ctx: HandlerContext):
     # json消息段转换为纯文本

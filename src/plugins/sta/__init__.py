@@ -1,12 +1,18 @@
 from ..utils import *
-from .draw import draw_sta, reset_jieba, draw_date_count_plot, draw_word_count_plot, draw_sta_sum
+from .draw import (
+    draw_sta,
+    draw_sta_sum,
+    render_date_count_report,
+    render_word_count_report,
+    reset_jieba,
+)
 from ..record.sql import query_msg_by_range, query_msg_count
 
 
 config = Config("sta")
 logger = get_logger("Sta")
 file_db = get_file_db("data/sta/db.json", logger)
-gbl = get_group_black_list(file_db, logger, "sta")
+gwl = get_group_white_list(file_db, logger, "sta")
 cd = ColdDown(file_db, logger)
 
 notify_gwl = get_group_white_list(file_db, logger, "sta_notify", is_service=False)
@@ -103,9 +109,13 @@ async def get_date_count_statistic(group_id, days, user_id=None):
             user_counts.append(user_cnt)
         dates.append(datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S"))
         counts.append(cnt)
-    with TempFilePath(".png") as save_path:
-        draw_date_count_plot(dates, counts, save_path, user_counts)
-        return await get_image_cq(save_path)
+    report = await render_date_count_report(
+        dates,
+        counts,
+        user_counts,
+        group_id=group_id,
+    )
+    return await get_image_cq(report)
 
 # 获取某个词的统计图
 async def get_word_statistic(group_id, days, word):
@@ -136,16 +146,23 @@ async def get_word_statistic(group_id, days, word):
             topk_name.append(name)
         except:
             topk_name.append(str(user))
-    with TempFilePath(".png") as save_path:
-        draw_word_count_plot(dates, topk_user, topk_name, user_counts, user_date_counts, word, save_path)
-        return await get_image_cq(save_path)
+    report = await render_word_count_report(
+        dates,
+        topk_user,
+        topk_name,
+        user_counts,
+        user_date_counts,
+        word,
+        group_id=group_id,
+    )
+    return await get_image_cq(report)
 
 # ------------------------------------------------ 聊天逻辑 ------------------------------------------------
 
 
 # 发送每日统计图
 sta = CmdHandler(["/sta day",], logger)
-sta.check_cdrate(cd).check_wblist(gbl).check_group()
+sta.check_cdrate(cd).check_wblist(gwl).check_group()
 @sta.handle()
 async def _(ctx: HandlerContext):
     try:
@@ -164,7 +181,7 @@ async def _(ctx: HandlerContext):
 
 # 发送长时间统计图
 sta_sum = CmdHandler(["/sta_sum", "/sta_summary"], logger)
-sta_sum.check_cdrate(cd).check_wblist(gbl).check_group()
+sta_sum.check_cdrate(cd).check_wblist(gwl).check_group()
 @sta_sum.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
@@ -201,7 +218,7 @@ async def _(ctx: HandlerContext):
 
 # 发送总消息量关于时间的统计图
 sta_time = CmdHandler(["/sta_time"], logger)
-sta_time.check_cdrate(cd).check_wblist(gbl).check_group()
+sta_time.check_cdrate(cd).check_wblist(gwl).check_group()
 @sta_time.handle()
 async def _(ctx: HandlerContext):
     cqs = extract_cq_code(ctx.get_msg())
@@ -219,7 +236,7 @@ async def _(ctx: HandlerContext):
 
 # 发送某个词的统计图
 sta_word = CmdHandler(["/sta_word"], logger)
-sta_word.check_cdrate(cd).check_wblist(gbl).check_group()
+sta_word.check_cdrate(cd).check_wblist(gwl).check_group()
 @sta_word.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
@@ -236,7 +253,7 @@ async def _(ctx: HandlerContext):
 
 # 添加用户词汇
 msgadd = CmdHandler(["/sta_add"], logger)
-msgadd.check_superuser().check_wblist(gbl)
+msgadd.check_superuser().check_wblist(gwl)
 @msgadd.handle()
 async def _(ctx: HandlerContext):
     words = ctx.get_args().strip().split()
@@ -254,7 +271,7 @@ async def _(ctx: HandlerContext):
 
 # 添加停用词汇
 msgban = CmdHandler(["/sta_ban"], logger)
-msgadd.check_superuser().check_wblist(gbl)
+msgadd.check_superuser().check_wblist(gwl)
 @msgban.handle()
 async def _(ctx: HandlerContext):
     words = ctx.get_args().strip().split()
@@ -269,7 +286,7 @@ async def _(ctx: HandlerContext):
     file_db.set("stopwords", stopwords)
     reset_jieba()
     return await ctx.asend_reply_msg(f"成功添加{len(words)}条停用词汇")
- 
+
 
 # ------------------------------------------------ 定时任务 ------------------------------------------------
 
@@ -278,7 +295,7 @@ async def _(ctx: HandlerContext):
 @scheduler.scheduled_job("cron", hour=STATICSTIC_TIME[0], minute=STATICSTIC_TIME[1], second=STATICSTIC_TIME[2])
 async def cron_statistic():
     for group_id in notify_gwl.get():
-        if group_id in gbl.get(): continue
+        if group_id not in gwl.get(): continue
         
         cancel_date = file_db.get("cancel_date", {})
         if group_id in cancel_date and cancel_date[group_id] == datetime.now().strftime("%Y-%m-%d"):
@@ -295,7 +312,7 @@ async def cron_statistic():
 
 # 取消今天的统计自动发送
 cancel_today = CmdHandler("/sta_cancel_today", logger)
-cancel_today.check_superuser().check_group().check_wblist(gbl).check_wblist(notify_gwl)
+cancel_today.check_superuser().check_group().check_wblist(gwl).check_wblist(notify_gwl)
 @cancel_today.handle()
 async def _(ctx: HandlerContext):
     group_id = ctx.group_id
@@ -308,4 +325,3 @@ async def _(ctx: HandlerContext):
         cancel_date[group_id] = datetime.now().strftime("%Y-%m-%d")
         file_db.set("cancel_date", cancel_date)
         return await ctx.asend_reply_msg(f'取消今天的统计自动发送')
- 

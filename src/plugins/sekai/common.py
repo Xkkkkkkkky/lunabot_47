@@ -34,6 +34,34 @@ ALL_SERVER_REGION_NAMES = ['日服', '国际服', '台服', '韩服', '国服']
 NEED_TRANSLATE_REGIONS = ['jp', 'en', 'kr']
 TRANSLATED_REGIONS = ['cn', 'tw']
 
+
+def _get_enabled_server_regions() -> List[str]:
+    region_enabled = config.get('region_enabled', None, raise_exc=False)
+    if region_enabled is None:
+        region_enabled = {'jp': True}
+    if not isinstance(region_enabled, dict):
+        raise ValueError("配置 sekai.sekai.region_enabled 必须是区服到布尔值的映射")
+
+    unknown_regions = set(region_enabled) - set(ALL_SERVER_REGIONS)
+    if unknown_regions:
+        raise ValueError(f"配置 sekai.sekai.region_enabled 包含未知区服: {', '.join(sorted(unknown_regions))}")
+    invalid_regions = [region for region, enabled in region_enabled.items() if not isinstance(enabled, bool)]
+    if invalid_regions:
+        raise ValueError(f"配置 sekai.sekai.region_enabled 必须使用 true/false: {', '.join(invalid_regions)}")
+
+    enabled_regions = [region for region in ALL_SERVER_REGIONS if region_enabled.get(region, False)]
+    if not enabled_regions:
+        raise ValueError("配置 sekai.sekai.region_enabled 至少需要启用一个区服")
+    return enabled_regions
+
+
+ENABLED_SERVER_REGIONS = _get_enabled_server_regions()
+DEFAULT_SERVER_REGION = ENABLED_SERVER_REGIONS[0]
+
+
+def filter_enabled_server_regions(regions: List[str]) -> List[str]:
+    return [region for region in regions if region in ENABLED_SERVER_REGIONS]
+
 REGION_UTC_OFFSET = {
     'jp': 9,
     'en': -8,

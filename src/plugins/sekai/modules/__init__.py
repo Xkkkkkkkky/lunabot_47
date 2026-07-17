@@ -1,3 +1,5 @@
+from ..common import config
+
 from .card_extractor import *
 from .card import *
 from .chart import *
@@ -8,7 +10,8 @@ from .gacha import *
 from .honor import *
 from .misc import *
 from .music import *
-from .mysekai import *
+if config.get('features.mysekai', True):
+    from .mysekai import *
 from .profile import *
 from .resbox import *
 from .score import *

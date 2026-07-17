@@ -14,7 +14,6 @@ import openai
 import copy
 from tenacity import retry, stop_after_attempt, wait_fixed
 from ..record.sql import query_recent_msg
-from ..code.run import run as run_code
 from .autochat import *
 
 
@@ -38,7 +37,6 @@ TOOLS_TRIGGER_WORDS_PATH = "config/chat/tools_trigger_words.txt"
 SYSTEM_PROMPT_PYTHON_RET = "config/chat/system_prompt_python_ret.txt"
 
 CLEANCHAT_TRIGGER_WORDS = ["cleanchat", "clean_chat", "cleanmode", "clean_mode"]
-IMAGE_RESPONSE_TRIGGER_WORDS = ['生成图片', '图片生成', 'imagen', 'Imagen', 'IMAGEN']
 
 
 # 使用工具 返回需要添加到回复的额外信息
@@ -366,16 +364,6 @@ async def _(ctx: HandlerContext):
                     current_date=datetime.now().strftime("%Y-%m-%d")
                 )
 
-        # 是否生成图片
-        enable_image_response = False
-        if any([word in query_text for word in IMAGE_RESPONSE_TRIGGER_WORDS]):
-            for word in IMAGE_RESPONSE_TRIGGER_WORDS:
-                query_text = query_text.replace(word, "")
-            enable_image_response = True
-            query_text += "\n生成图片作为回复"
-            system_prompt = None
-            logger.info(f"使用生成图片模式")
-            
         # 收集回复消息的内容
         if reply_msg is not None:
             # 回复模式，检测是否在历史会话中
@@ -431,9 +419,7 @@ async def _(ctx: HandlerContext):
         # 如果未指定模型，根据配置和消息类型获取模型
         if not model_name:
             mode = "text"
-            if enable_image_response:
-                mode = "image"
-            elif need_tools:
+            if need_tools:
                 mode = "tool"
             elif session.has_multimodal_content():
                 mode = "mm"
@@ -450,7 +436,6 @@ async def _(ctx: HandlerContext):
             t = datetime.now()
             resp = await session.get_response(
                 model_name=model_name, 
-                image_response=enable_image_response,
                 timeout=300,
             )
 
@@ -552,8 +537,7 @@ async def _(ctx: HandlerContext):
         text_model_name = get_model_name(ctx.event, "text")
         mm_model_name = get_model_name(ctx.event, "mm")
         tool_model_name = get_model_name(ctx.event, "tool")
-        image_model_name = get_model_name(ctx.event, "image")
-        return await ctx.asend_reply_msg(f"文本模型: {text_model_name}\n多模态模型: {mm_model_name}\n工具模型: {tool_model_name}\n图片生成模型: {image_model_name}")
+        return await ctx.asend_reply_msg(f"文本模型: {text_model_name}\n多模态模型: {mm_model_name}\n工具模型: {tool_model_name}")
     # 修改
     else:
         # 群聊中只有超级用户可以修改模型
@@ -578,10 +562,7 @@ async def _(ctx: HandlerContext):
             return await ctx.asend_reply_msg(f"已切换工具模型: {last_model_name} -> {name}")
         # 只修改图片生成模型
         elif "image" in args:
-            last_model_name = get_model_name(ctx.event, "image")
-            args = args.replace("image", "").strip()
-            name = change_model_name(ctx.event, args, "image")
-            return await ctx.asend_reply_msg(f"已切换图片生成模型: {last_model_name} -> {name}")
+            return await ctx.asend_reply_msg("当前不支持图片生成模型")
         # 同时修改文本和多模态模型
         else:
             msg = ""
@@ -635,7 +616,7 @@ async def _(ctx: HandlerContext):
 
 # 获取所有可用的供应商名
 chat_providers = CmdHandler([
-    "/供应商", "/chat_provider", "/chat provider", "/chatprovider"
+    "/供应商", "/chat provider"
 ], logger)
 chat_providers.check_cdrate(chat_cd).check_wblist(gwl)
 @chat_providers.handle()
@@ -765,4 +746,3 @@ async def _(ctx: HandlerContext):
             um_text += f"[{formated_time}] {event}\n"
 
     return await ctx.asend_fold_msg_adaptive(um_text.strip())
-

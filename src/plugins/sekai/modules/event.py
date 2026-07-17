@@ -93,7 +93,7 @@ def get_left_transparent_width(img: Image.Image) -> int:
 
 # 判断某个卡牌id的限定类型
 async def get_card_supply_type(ctx: SekaiHandlerContext, cid: int) -> str:
-    ctx = SekaiHandlerContext.from_region("jp")
+    ctx = SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION)
     card = await ctx.md.cards.find_by_id(cid)
     if not card or 'cardSupplyId' not in card:
         return "normal"
@@ -1142,7 +1142,7 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_send_boost = SekaiCmdHandler([
     "/pjsk send boost", "/pjsk_send_boost", "/pjsk grant boost", "/pjsk_grant_boost",
     "/自动送火", "/送火",
-], regions=['jp'])
+], regions=['jp'], disabled=not config.get('features.send_boost', True))
 pjsk_send_boost.check_cdrate(cd).check_wblist(gbl)
 @pjsk_send_boost.handle()
 async def _(ctx: SekaiHandlerContext):

@@ -8,6 +8,8 @@ from tenacity import retry, wait_fixed, stop_after_attempt
 set_log_level('INFO')
 
 ALL_SERVER_REGIONS = ['jp', 'cn', 'tw', 'kr', 'en']
+REGION_ENABLED = config.get('region_enabled', {'jp': True})
+ENABLED_SERVER_REGIONS = [region for region in ALL_SERVER_REGIONS if REGION_ENABLED.get(region, False)]
 
 RECORD_TIME_AFTER_EVENT_END_CFG = config.item('sk.record_time_after_event_end_minutes')
 RECORD_INTERVAL_CFG = config.item('sk.record_interval_seconds')
@@ -281,9 +283,9 @@ class EventTracker:
 
 
 async def main():
-    trackers = { region: EventTracker(region) for region in ALL_SERVER_REGIONS }
+    trackers = { region: EventTracker(region) for region in ENABLED_SERVER_REGIONS }
     tasks = []
-    for region in ALL_SERVER_REGIONS:
+    for region in ENABLED_SERVER_REGIONS:
         tasks.append(trackers[region].start_track())
     await asyncio.gather(*tasks)
 

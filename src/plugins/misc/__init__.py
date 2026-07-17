@@ -4,12 +4,12 @@ import yappi
 config = Config('misc')
 logger = get_logger("Misc")
 file_db = get_file_db("data/misc/db.json", logger)
-gbl = get_group_black_list(file_db, logger, "misc")
+gwl = get_group_white_list(file_db, logger, "misc")
 cd = ColdDown(file_db, logger)
 
 
 profiler = CmdHandler(['/profiling', '/性能分析'], logger)
-profiler.check_cdrate(cd).check_wblist(gbl).check_superuser()
+profiler.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @profiler.handle()
 async def _(ctx: HandlerContext):
     if not yappi.is_running():

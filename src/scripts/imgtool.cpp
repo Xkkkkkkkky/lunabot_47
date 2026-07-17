@@ -9,6 +9,7 @@
 #include <vector>
 #include <string>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <tuple>
 #include <cassert> 

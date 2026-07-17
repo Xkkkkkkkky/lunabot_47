@@ -5,7 +5,7 @@ config = Config('broadcast')
 logger = get_logger("Broadcast")
 file_db = get_file_db("data/broadcast/db.json", logger)
 cd = ColdDown(file_db, logger)
-gbl = get_group_black_list(file_db, logger, 'broadcast')
+gwl = get_group_white_list(file_db, logger, 'broadcast')
 
 
 def get_guid(ctx: HandlerContext) -> str:
@@ -34,7 +34,7 @@ async def send_msg_to(ctx: HandlerContext, guid: str, msg: str):
 
 
 bc_list = CmdHandler(['/broadcast list', '/bc list'], logger)
-bc_list.check_cdrate(cd).check_wblist(gbl)
+bc_list.check_cdrate(cd).check_wblist(gwl)
 @bc_list.handle()
 async def _(ctx: HandlerContext):
     bc = file_db.get('bc', {})
@@ -45,7 +45,7 @@ async def _(ctx: HandlerContext):
 
 
 bc_sub = CmdHandler(['/broadcast sub', '/bc sub'], logger)
-bc_sub.check_cdrate(cd).check_wblist(gbl)
+bc_sub.check_cdrate(cd).check_wblist(gwl)
 @bc_sub.handle()
 async def _(ctx: HandlerContext):
     if is_group_msg(ctx.event):
@@ -63,7 +63,7 @@ async def _(ctx: HandlerContext):
 
 
 bc_unsub = CmdHandler(['/broadcast unsub', '/bc unsub'], logger)
-bc_unsub.check_cdrate(cd).check_wblist(gbl)
+bc_unsub.check_cdrate(cd).check_wblist(gwl)
 @bc_unsub.handle()
 async def _(ctx: HandlerContext):
     if is_group_msg(ctx.event):
@@ -81,7 +81,7 @@ async def _(ctx: HandlerContext):
 
 
 bc_unsuball = CmdHandler(['/broadcast unsuball', '/bc unsuball'], logger)
-bc_unsuball.check_cdrate(cd).check_wblist(gbl)
+bc_unsuball.check_cdrate(cd).check_wblist(gwl)
 @bc_unsuball.handle()
 async def _(ctx: HandlerContext):
     if is_group_msg(ctx.event):
@@ -102,7 +102,7 @@ async def _(ctx: HandlerContext):
 
 
 bc_sublist = CmdHandler(['/broadcast sublist', '/bc sublist'], logger)
-bc_sublist.check_cdrate(cd).check_wblist(gbl)
+bc_sublist.check_cdrate(cd).check_wblist(gwl)
 @bc_sublist.handle()
 async def _(ctx: HandlerContext):
     bc = file_db.get('bc', {})
@@ -118,7 +118,7 @@ async def _(ctx: HandlerContext):
 
 
 bc_add = CmdHandler(['/broadcast add', '/bc add'], logger)
-bc_add.check_cdrate(cd).check_wblist(gbl).check_superuser()
+bc_add.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @bc_add.handle()
 async def _(ctx: HandlerContext):
     bc = file_db.get('bc', {})
@@ -131,7 +131,7 @@ async def _(ctx: HandlerContext):
 
 
 bc_del = CmdHandler(['/broadcast del', '/bc del'], logger)
-bc_del.check_cdrate(cd).check_wblist(gbl).check_superuser()
+bc_del.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @bc_del.handle()
 async def _(ctx: HandlerContext):
     bc = file_db.get('bc', {})
@@ -144,7 +144,7 @@ async def _(ctx: HandlerContext):
 
 
 bc_send = CmdHandler(['/broadcast send', '/bc send'], logger)
-bc_send.check_cdrate(cd).check_wblist(gbl).check_superuser()
+bc_send.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @bc_send.handle()
 async def _(ctx: HandlerContext):
     bc = file_db.get('bc', {})
@@ -203,7 +203,7 @@ async def _(ctx: HandlerContext):
 
 
 bc_listsub = CmdHandler(['/broadcast listsub', '/bc listsub'], logger)
-bc_listsub.check_cdrate(cd).check_wblist(gbl).check_superuser()
+bc_listsub.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @bc_listsub.handle()
 async def _(ctx: HandlerContext):
     bc = file_db.get('bc', {})
@@ -217,4 +217,3 @@ async def _(ctx: HandlerContext):
     for guid in sub_list:
         msg += f"{await get_desc_by_guid(ctx, guid)}\n"
     return await ctx.asend_reply_msg(msg.strip())
-

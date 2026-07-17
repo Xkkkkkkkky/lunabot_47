@@ -1,4 +1,9 @@
 from .utils import *
+from .napcat_stream import (
+    make_napcat_stream_file_ref,
+    parse_napcat_stream_file_ref,
+    upload_file_via_napcat_stream,
+)
 from ..common.blacklist import HARDCODED_BLACKLIST_USERS
 from nonebot import on_command
 from nonebot import get_bot as nb_get_bot
@@ -26,6 +31,59 @@ SUPERUSER_CFG = global_config.item('superuser')
 DEFAULT_LQ_IMAGE_QUALITY_CFG = global_config.item('msg_send.low_quality_image.default_quality')
 DEFAULT_LQ_IMAGE_SUBSAMPLING_CFG = global_config.item('msg_send.low_quality_image.default_subsampling')
 DEFAULT_LQ_IMAGE_OPTIMIZE_CFG = global_config.item('msg_send.low_quality_image.default_optimize')
+
+
+def get_image_transport_mode() -> str:
+    mode = str(global_config.get('msg_send.image_transport.mode', 'file')).strip().lower()
+    if mode not in ('file', 'napcat_stream'):
+        raise ValueError(f'未知图片传递方式: {mode}')
+    return mode
+
+
+def get_local_image_cq(file_path: str) -> str:
+    file_path = os.path.abspath(file_path)
+    if get_image_transport_mode() == 'napcat_stream':
+        file_ref = make_napcat_stream_file_ref(file_path)
+    else:
+        file_ref = f'file://{file_path}'
+    return f'[CQ:image,file={file_ref}]'
+
+
+async def prepare_message_for_send(bot: Bot, message: Union[str, Message]) -> Message:
+    """
+    上传 NapCat Stream 图片占位引用，并替换为 NapCat 所在机器上的临时文件路径。
+    """
+    message = Message(message)
+    uploaded_paths = {}
+    for segment in message:
+        if segment.type != 'image':
+            continue
+        file_path = parse_napcat_stream_file_ref(segment.data.get('file'))
+        if file_path is None:
+            continue
+        if bot is None:
+            raise RuntimeError('处理 NapCat Stream 图片时未找到对应 Bot')
+        remote_path = uploaded_paths.get(file_path)
+        if remote_path is None:
+            remote_path = await upload_file_via_napcat_stream(
+                bot,
+                file_path,
+                chunk_size=int(global_config.get(
+                    'msg_send.image_transport.napcat_stream.chunk_size',
+                    64 * 1024,
+                )),
+                file_retention_ms=int(global_config.get(
+                    'msg_send.image_transport.napcat_stream.file_retention_ms',
+                    5 * 60 * 1000,
+                )),
+                verify_sha256=bool(global_config.get(
+                    'msg_send.image_transport.napcat_stream.verify_sha256',
+                    True,
+                )),
+            )
+            uploaded_paths[file_path] = remote_path
+        segment.data['file'] = f'file://{remote_path}'
+    return message
 
 
 def get_all_bots() -> list[Bot]:
@@ -420,7 +478,7 @@ async def get_image_cq(
             if not os.path.exists(image):
                 raise Exception(f'图片文件不存在: {image}')
             if send_url_as_is:
-                return f'[CQ:image,file=file://{os.path.abspath(image)}]'
+                return get_local_image_cq(image)
             image = open_image(image)
             return await get_image_cq(image, *args)
 
@@ -440,7 +498,7 @@ async def get_image_cq(
                 )
             else:
                 image.save(tmp_path)
-            return f'[CQ:image,file=file://{os.path.abspath(tmp_path)}]'
+            return get_local_image_cq(tmp_path)
 
     except Exception as e:
         if allow_error: 
@@ -968,7 +1026,8 @@ async def send_msg(handler, event: MessageEvent, message: str):
     发送普通消息
     """
     if check_group_disabled_by_event(event): return None
-    return await handler.send(Message(message))
+    bot = get_bot_by_self_id(event.self_id)
+    return await handler.send(await prepare_message_for_send(bot, message))
 
 @send_msg_func
 async def send_reply_msg(handler, event: MessageEvent, message: str):
@@ -976,7 +1035,9 @@ async def send_reply_msg(handler, event: MessageEvent, message: str):
     发送回复消息
     """
     if check_group_disabled_by_event(event): return None
-    return await handler.send(Message(f'[CQ:reply,id={event.message_id}]{message}'))
+    bot = get_bot_by_self_id(event.self_id)
+    message = f'[CQ:reply,id={event.message_id}]{message}'
+    return await handler.send(await prepare_message_for_send(bot, message))
 
 @send_msg_func
 async def send_at_msg(handler, event: MessageEvent, message: str):
@@ -984,7 +1045,9 @@ async def send_at_msg(handler, event: MessageEvent, message: str):
     发送at消息
     """
     if check_group_disabled_by_event(event): return None
-    return await handler.send(Message(f'[CQ:at,qq={event.user_id}]{message}'))
+    bot = get_bot_by_self_id(event.self_id)
+    message = f'[CQ:at,qq={event.user_id}]{message}'
+    return await handler.send(await prepare_message_for_send(bot, message))
 
 # -------- event外发送 -------- #
 
@@ -1004,6 +1067,7 @@ async def send_group_msg_by_bot(group_id: int, content: str, bot: Bot = None):
     if not await check_in_group(bot, group_id):
         utils_logger.warning(f'取消发送消息到未加入的群 {group_id}')
         return
+    content = await prepare_message_for_send(bot, content)
     return await bot.send_group_msg(group_id=int(group_id), message=content)
 
 @send_msg_func
@@ -1022,6 +1086,7 @@ async def send_private_msg_by_bot(user_id: int, content: str, bot: Bot = None):
     if not await check_is_friend(bot, user_id):
         utils_logger.warning(f'取消发送私聊消息给非好友用户 {user_id}')
         return
+    content = await prepare_message_for_send(bot, content)
     return await bot.send_private_msg(user_id=int(user_id), message=content)
 
 # -------- 折叠消息处理 -------- #
@@ -1169,12 +1234,24 @@ async def send_fold_msg(
         if group_id and check_group_disabled(group_id):
             utils_logger.warning(f'取消发送消息到被全局禁用的群 {group_id}')
             return
-        selfname = await get_group_member_name(group_id, bot.self_id)
+        if group_id:
+            selfname = await get_group_member_name(group_id, bot.self_id)
+        else:
+            try:
+                selfname = (await get_stranger_info(bot, bot.self_id)).get('nickname', str(bot.self_id))
+            except Exception:
+                selfname = str(bot.self_id)
         msg_list = []
         for i in range(len(contents)):
             if i == 0 and first_is_user:
                 uid = user_id
-                nickname = await get_group_member_name(group_id, user_id)
+                if group_id:
+                    nickname = await get_group_member_name(group_id, user_id)
+                else:
+                    try:
+                        nickname = (await get_stranger_info(bot, user_id)).get('nickname', str(user_id))
+                    except Exception:
+                        nickname = str(user_id)
             else:
                 uid = int(bot.self_id)
                 nickname = selfname
@@ -1187,6 +1264,12 @@ async def send_fold_msg(
                 }
             })
         try:
+            prepared_contents = [
+                await prepare_message_for_send(bot, content)
+                for content in contents
+            ]
+            for i, content in enumerate(prepared_contents):
+                msg_list[i]["data"]["content"] = content
             if group_id:
                 ret = await bot.send_group_forward_msg(group_id=group_id, messages=msg_list)
             else:
@@ -1331,7 +1414,15 @@ DEFAULT_CD_CFG = global_config.item('default_cd')
 
 class ColdDown:
     """
-    冷却时间
+    冷却时间。
+
+    ``key_mode`` 决定冷却记录的作用域：
+    - ``user``：按用户跨群共享冷却（默认，保持原行为）；
+    - ``group``：按群共享冷却，私聊事件自动跳过；
+    - ``group_user``：同一用户在不同群分别计算冷却。
+
+    旧参数 ``group_seperate=True`` 等价于 ``key_mode='group_user'``，保留该
+    参数以兼容现有调用。
     """
     def __init__(
         self, 
@@ -1340,23 +1431,40 @@ class ColdDown:
         default_interval: Union[int, ConfigItem]=DEFAULT_CD_CFG, 
         superuser: Union[List[int], ConfigItem]=SUPERUSER_CFG, 
         cold_down_name: str=None, 
-        group_seperate: bool=False
+        group_seperate: bool=False,
+        key_mode: str='user',
     ):
+        if group_seperate:
+            key_mode = 'group_user'
+        if key_mode not in ('user', 'group', 'group_user'):
+            raise ValueError(f'未知冷却作用域: {key_mode}')
         self.default_interval = default_interval
         self.superuser = superuser
         self.db = db
         self.logger = logger
         self.group_seperate = group_seperate
+        self.key_mode = key_mode
         self.cold_down_name = f'cold_down' if cold_down_name is None else f'cold_down_{cold_down_name}'
+
+    def _get_key(self, event) -> Optional[str]:
+        """根据事件生成冷却键；纯群冷却不处理私聊事件。"""
+
+        if self.key_mode == 'group':
+            if not isinstance(event, GroupMessageEvent):
+                return None
+            return str(event.group_id)
+        if self.key_mode == 'group_user' and isinstance(event, GroupMessageEvent):
+            return f'{event.group_id}-{event.user_id}'
+        return str(event.user_id)
     
     async def check(self, event, interval: int=None, allow_super=True, verbose=True):
         if allow_super and check_superuser(event, self.superuser):
             # self.logger.debug(f'{self.cold_down_name}检查: 超级用户{event.user_id}')
             return True
         if interval is None: interval = get_cfg_or_value(self.default_interval)
-        key = str(event.user_id)
-        if isinstance(event, GroupMessageEvent) and self.group_seperate:
-            key = f'{event.group_id}-{key}'
+        key = self._get_key(event)
+        if key is None:
+            return True
         last_use = self.db.get(self.cold_down_name, {})
         now = datetime.now().timestamp()
         if key not in last_use:
@@ -1390,7 +1498,12 @@ class ColdDown:
         return True
 
     def get_last_use(self, user_id: int, group_id: int=None):
-        key = f'{group_id}-{user_id}' if group_id else str(user_id)
+        if self.key_mode == 'group':
+            key = str(group_id if group_id is not None else user_id)
+        elif self.key_mode == 'group_user' and group_id is not None:
+            key = f'{group_id}-{user_id}'
+        else:
+            key = str(user_id)
         last_use = self.db.get(self.cold_down_name, {})
         if key not in last_use:
             return None
@@ -1785,6 +1898,12 @@ def get_group_black_list(
     return GroupBlackList(db, logger, name, superuser, on_func, off_func)
 
 
+def is_group_service_enabled(name: str, group_id: int) -> bool:
+    """返回已注册服务在指定群聊中的启用状态。"""
+    service = _gwls.get(name) or _gbls.get(name)
+    return service is not None and service.check_id(group_id)
+
+
 
 # ============================ 聊天处理 ============================ #
 
@@ -2080,6 +2199,7 @@ class CmdHandler:
             disable_help=False,
             help_trigger_condition: Union[str, Callable] = 'exact',
             use_seg_cmd=True,
+            force_whitespace: Union[str, bool, None] = None,
         ):
         if isinstance(commands, str) or isinstance(commands, SegCmd):
             commands = [commands]
@@ -2102,6 +2222,8 @@ class CmdHandler:
         self.check_group_enabled = check_group_enabled
         handler_kwargs = {}
         if only_to_me: handler_kwargs["rule"] = rule_to_me()
+        if force_whitespace is not None:
+            handler_kwargs["force_whitespace"] = force_whitespace
         self.handler = on_command(self.commands[0], priority=priority, block=block, aliases=set(self.commands[1:]), **handler_kwargs)
         self.superuser_check = None
         self.private_group_check = None
@@ -2200,10 +2322,11 @@ class CmdHandler:
                 del cls.help_docs[name]
 
         # 删除不在帮助文档中的缓存图片
+        style_signature = get_markdown_style_signature()
         for doc in cls.help_docs.values():
             for part in doc.parts:
                 if part.md5:
-                    all_md5.add(part.md5)
+                    all_md5.add(get_md5(f'{part.content}:{style_signature}'))
         for path in glob.glob(os.path.join(cls.HELP_PART_IMG_CACHE_DIR, "*.png")):
             name = Path(path).stem
             if name not in all_md5:
@@ -2223,7 +2346,9 @@ class CmdHandler:
 
     @classmethod
     async def get_cmd_help_doc_img(cls, part: HelpDocCmdPart, width=600) -> Image.Image:
-        md5 = get_md5(part.content)
+        md5 = get_md5(
+            f'{part.content}:{get_markdown_style_signature()}'
+        )
         cache_path = create_parent_folder(os.path.join(cls.HELP_PART_IMG_CACHE_DIR, f"{md5}.png"))
         if os.path.exists(cache_path):
             return open_image(cache_path)
@@ -2409,7 +2534,20 @@ def on_clean_quited_group(func: Callable[[CurrentGroupInfoDict], Any]):
 
 
 DEFAULT_CONFIRM_ACTIONS_TIMEOUT_CFG = global_config.item('confirm_actions_timeout_seconds')
-_need_confirm_actions: dict[tuple[int, int], tuple[datetime, Callable[[HandlerContext], Any]]] = {}
+
+@dataclass
+class NeedConfirmAction:
+    """待确认操作及其可选的消息引用、参数校验约束。"""
+
+    expire_time: datetime
+    action: Callable[[HandlerContext], Any]
+    prompt_message_id: int | None = None
+    require_reply: bool = False
+    allow_cancel_command: bool = True
+    confirmation_validator: Callable[[HandlerContext], Any] | None = None
+
+
+_need_confirm_actions: dict[tuple[int, int], NeedConfirmAction] = {}
 
 async def add_need_confirm_action(
     ctx: HandlerContext, 
@@ -2417,24 +2555,46 @@ async def add_need_confirm_action(
     additional_msg: str = None, 
     timeout: timedelta = None,
     fold_msg: bool = True,
+    require_reply: bool = False,
+    allow_cancel_command: bool = True,
+    confirmation_validator: Callable[[HandlerContext], Any] | None = None,
 ):
     key = (ctx.user_id, ctx.group_id or None)
     if timeout is None:
         timeout = timedelta(seconds=DEFAULT_CONFIRM_ACTIONS_TIMEOUT_CFG.get())
-    _need_confirm_actions[key] = (datetime.now() + timeout, action)
-    msg = f'请发送"/确认"或"/取消"以继续操作'
+    if require_reply:
+        msg = (
+            f'请在{get_readable_timedelta(timeout)}内回复本消息并发送"/确认"以执行操作，'
+            '超时未确认将自动取消'
+        )
+    else:
+        msg = f'请发送"/确认"或"/取消"以继续操作'
     if additional_msg:
         msg = f'{additional_msg}\n' + msg
     if fold_msg:
-        await ctx.asend_fold_msg_adaptive(msg, need_reply=True)
+        ret = await ctx.asend_fold_msg_adaptive(msg, need_reply=True)
     else:
-        await ctx.asend_reply_msg(msg)
+        ret = await ctx.asend_reply_msg(msg)
+
+    prompt_message_id = None
+    if isinstance(ret, dict) and ret.get('message_id') is not None:
+        prompt_message_id = int(ret['message_id'])
+    if require_reply and prompt_message_id is None:
+        raise ReplyException('无法获取待确认消息 ID，本次操作已自动取消')
+    _need_confirm_actions[key] = NeedConfirmAction(
+        expire_time=datetime.now() + timeout,
+        action=action,
+        prompt_message_id=prompt_message_id,
+        require_reply=require_reply,
+        allow_cancel_command=allow_cancel_command,
+        confirmation_validator=confirmation_validator,
+    )
 
 @repeat_with_interval(10, "清空过期确认操作", utils_logger)
 async def _clean_expired_confirm_actions():
     now = datetime.now()
-    for key, (expire_time, action) in list(_need_confirm_actions.items()):
-        if now >= expire_time:
+    for key, pending in list(_need_confirm_actions.items()):
+        if now >= pending.expire_time:
             del _need_confirm_actions[key]
 
 
@@ -2737,10 +2897,18 @@ _handler.check_cdrate(cd)
 @_handler.handle()
 async def _(ctx: HandlerContext):
     key = (ctx.user_id, ctx.group_id or None)
-    assert_and_reply(_need_confirm_actions.get(key), "当前没有需要确认的操作")
-    _, action = _need_confirm_actions[key]
+    pending = _need_confirm_actions.get(key)
+    assert_and_reply(pending, "当前没有需要确认的操作")
+    if pending.require_reply:
+        assert_and_reply(
+            ctx.get_reply_msg_id() == pending.prompt_message_id,
+            '请引用待确认消息并发送"/确认"',
+        )
+    if pending.confirmation_validator is not None:
+        # 先校验确认参数，校验失败时保留待确认操作，允许用户重试。
+        await call_common_or_async(pending.confirmation_validator, ctx)
     del _need_confirm_actions[key]
-    await call_common_or_async(action, ctx)
+    await call_common_or_async(pending.action, ctx)
     
 # 取消操作
 _handler = CmdHandler(['/cancel', '/取消'], utils_logger)
@@ -2748,7 +2916,10 @@ _handler.check_cdrate(cd)
 @_handler.handle()
 async def _(ctx: HandlerContext):
     key = (ctx.user_id, ctx.group_id or None)
-    assert_and_reply(_need_confirm_actions.get(key), "当前没有需要取消的操作")
+    pending = _need_confirm_actions.get(key)
+    assert_and_reply(pending, "当前没有需要取消的操作")
+    if not pending.allow_cancel_command:
+        return
     del _need_confirm_actions[key]
     await ctx.asend_reply_msg("已取消最近的操作")
 
@@ -2869,4 +3040,3 @@ async def _(ctx: HandlerContext):
 
     except Exception as e:
         await ctx.asend_fold_msg_adaptive(f"执行代码失败\n{traceback.format_exc()}")
-

@@ -25,7 +25,6 @@ from .music import (
     get_music_diff_info,
     musicmetas_json,
 )
-from .mysekai import MYSEKAI_REGIONS
 from sekai_deck_recommend_cpp import (
     DeckRecommendOptions, 
     DeckRecommendCardConfig, 
@@ -34,6 +33,8 @@ from sekai_deck_recommend_cpp import (
     DeckRecommendSaOptions,
     RecommendDeck,
 )
+
+MYSEKAI_REGIONS = ENABLED_SERVER_REGIONS if config.get('features.mysekai', True) else []
 
 
 BOOST_BONUS_DICT: Dict[int, int] = {
@@ -625,7 +626,7 @@ async def extract_music_and_diff(
     live_type: str, 
     additional_args: dict,
 ) -> str:
-    jp_ctx = SekaiHandlerContext.from_region('jp')
+    jp_ctx = SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION)
     search_options = MusicSearchOptions(
         use_emb=False,
         use_id=True,
@@ -1664,7 +1665,7 @@ async def compose_deck_recommend_image(
 
     # ---------------------------- 绘图数据获取 ---------------------------- #
 
-    jp_ctx = SekaiHandlerContext.from_region('jp')
+    jp_ctx = SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION)
 
     if not music_compare:
         # 获取一般情况音乐标题和封面
@@ -2189,7 +2190,7 @@ mysekai_deck = SekaiCmdHandler([
     "/mysekai deck", "/pjsk mysekai deck",
     "/烤森组卡", "/烤森组队", "/烤森卡组", "/烤森配队",
     "/ms组卡", "/ms组队", "/ms卡组", "/ms配队",
-])
+], disabled=not config.get('features.mysekai', True))
 mysekai_deck.check_cdrate(cd).check_wblist(gbl)
 @mysekai_deck.handle()
 async def _(ctx: SekaiHandlerContext):
@@ -2226,7 +2227,7 @@ DECKREC_DATA_UPDATE_INTERVAL_CFG = config.item('deck.data_update_interval_second
 
 @repeat_with_interval(DECKREC_DATA_UPDATE_INTERVAL_CFG, "组卡数据更新", logger)
 async def deckrec_update_data():
-    for region in ALL_SERVER_REGIONS:
+    for region in ENABLED_SERVER_REGIONS:
         try:
             ctx = SekaiHandlerContext.from_region(region)
 

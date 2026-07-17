@@ -8,7 +8,7 @@ config = Config('gallery')
 logger = get_logger('Gallery')
 file_db = get_file_db('data/gallery/gallery.json', logger)
 cd = ColdDown(file_db, logger)
-gbl = get_group_black_list(file_db, logger, 'gallery')
+gwl = get_group_white_list(file_db, logger, 'gallery')
 
 THUMBNAIL_SIZE = (64, 64)
 SIZE_LIMIT_MB_CFG = config.item('size_limit_mb')
@@ -158,7 +158,7 @@ class GalleryManager:
                         return p.pid
                 return None
             return await run_in_pool(check)
-        
+
 
     @classmethod
     def get(cls) -> 'GalleryManager':
@@ -536,7 +536,7 @@ def get_user_add_history(hid: int) -> dict:
 gall_open = CmdHandler([
     '/gall open',
 ], logger)
-gall_open.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_open.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_open.handle()
 async def _(ctx: HandlerContext):
     name = ctx.get_args().strip()
@@ -547,7 +547,7 @@ async def _(ctx: HandlerContext):
 gall_close = CmdHandler([
     '/gall close',
 ], logger)
-gall_close.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_close.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_close.handle()
 async def _(ctx: HandlerContext):
     name = ctx.get_args().strip()
@@ -558,7 +558,7 @@ async def _(ctx: HandlerContext):
 gall_mode = CmdHandler([
     '/gall mode',
 ], logger)
-gall_mode.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_mode.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_mode.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
@@ -575,7 +575,7 @@ async def _(ctx: HandlerContext):
 gall_del = CmdHandler([
     '/gall del', '/gall remove',
 ], logger)
-gall_del.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_del.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_del.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
@@ -628,7 +628,7 @@ async def _(ctx: HandlerContext):
 gall_reload = CmdHandler([
     '/gall reload', '/gall update',
 ], logger)
-gall_reload.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_reload.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_reload.handle()
 async def _(ctx: HandlerContext):
     name = ctx.get_args().strip()
@@ -640,7 +640,7 @@ async def _(ctx: HandlerContext):
 gall_alias_add = CmdHandler([
     '/gall alias add', '/gall add alias',
 ], logger, priority=1)
-gall_alias_add.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_alias_add.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_alias_add.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
@@ -654,7 +654,7 @@ async def _(ctx: HandlerContext):
 gall_alias_del = CmdHandler([
     '/gall alias del', '/gall alias remove', '/gall del alias', '/gall remove alias',
 ], logger)
-gall_alias_del.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_alias_del.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_alias_del.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
@@ -668,7 +668,7 @@ async def _(ctx: HandlerContext):
 gall_pick = CmdHandler([
     '/gall pick', '/看',
 ], logger)
-gall_pick.check_cdrate(cd).check_wblist(gbl)
+gall_pick.check_cdrate(cd).check_wblist(gwl)
 @gall_pick.handle()
 async def _(ctx: HandlerContext):
     limit = config.get('pick_limit')
@@ -728,7 +728,7 @@ async def _(ctx: HandlerContext):
 gall_add = CmdHandler([
     '/gall add', '/gall upload', '/上传', '/添加',
 ], logger)
-gall_add.check_cdrate(cd).check_wblist(gbl)
+gall_add.check_cdrate(cd).check_wblist(gwl)
 @gall_add.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
@@ -816,7 +816,7 @@ async def _(ctx: HandlerContext):
 gall_list = CmdHandler([
     '/gall list', '/看所有', "/看全部",
 ], logger)
-gall_list.check_cdrate(cd).check_wblist(gbl)
+gall_list.check_cdrate(cd).check_wblist(gwl)
 @gall_list.handle()
 async def _(ctx: HandlerContext):
     name = ctx.get_args().strip()
@@ -902,7 +902,7 @@ async def _(ctx: HandlerContext):
 gall_log = CmdHandler([
     '/gall log',
 ], logger)
-gall_log.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_log.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_log.handle()
 async def _(ctx: HandlerContext):
     try: 
@@ -925,7 +925,7 @@ async def _(ctx: HandlerContext):
 gall_download = CmdHandler([
     '/gall download', 
 ], logger)
-gall_download.check_cdrate(cd).check_wblist(gbl).check_superuser().check_group()
+gall_download.check_cdrate(cd).check_wblist(gwl).check_superuser().check_group()
 @gall_download.handle()
 async def _(ctx: HandlerContext):
     name = ctx.get_args().strip()
@@ -952,7 +952,7 @@ async def _(ctx: HandlerContext):
 gall_cover = CmdHandler([
     '/gall cover', 
 ], logger)
-gall_cover.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_cover.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_cover.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
@@ -971,7 +971,7 @@ async def _(ctx: HandlerContext):
 gall_check = CmdHandler([
     '/gall check', 
 ], logger)
-gall_check.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_check.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_check.handle()
 async def _(ctx: HandlerContext):
     name = ctx.get_args().strip()
@@ -1042,7 +1042,7 @@ async def _(ctx: HandlerContext):
 gall_replace = CmdHandler([
     '/gall replace', 
 ], logger)
-gall_replace.check_cdrate(cd).check_wblist(gbl).check_superuser()
+gall_replace.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @gall_replace.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
@@ -1073,7 +1073,7 @@ async def _(ctx: HandlerContext):
 gall_download_all = CmdHandler([
     '/gall download link', '/下载图包', '/下载看', '/下载画廊',
 ], logger, priority=1)
-gall_download_all.check_cdrate(cd).check_wblist(gbl)
+gall_download_all.check_cdrate(cd).check_wblist(gwl)
 @gall_download_all.handle()
 async def _(ctx: HandlerContext):
     return await ctx.asend_msg(config.get('sync.share_link'))
@@ -1082,7 +1082,7 @@ async def _(ctx: HandlerContext):
 gall_cancel = CmdHandler([
     '/gall cancel', '/gall revert', '/取消上传', '/撤销上传', '/回退上传',
 ], logger)
-gall_cancel.check_cdrate(cd).check_wblist(gbl)
+gall_cancel.check_cdrate(cd).check_wblist(gwl)
 @gall_cancel.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
@@ -1120,7 +1120,7 @@ async def _(ctx: HandlerContext):
 gall_record = CmdHandler([
     '/gall record', '/上传记录',
 ], logger)
-gall_record.check_cdrate(cd).check_wblist(gbl)
+gall_record.check_cdrate(cd).check_wblist(gwl)
 @gall_record.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
@@ -1220,4 +1220,3 @@ for sync_time in config.get('sync.sync_times'):
         for g in GalleryManager.get().galleries.values():
             await run_in_pool(sync, g)
             remove_folder(local_dir)
-        

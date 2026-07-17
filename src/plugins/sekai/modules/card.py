@@ -89,7 +89,7 @@ DETAIL_SKILL_KEYWORDS_IDS = [
 
 # 获取sd图
 async def get_character_sd_image(cuid: int) -> Image.Image:
-    return await SekaiHandlerContext.from_region('jp').rip.img(f"character/character_sd_l/chr_sp_{cuid}.png")
+    return await SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION).rip.img(f"character/character_sd_l/chr_sp_{cuid}.png")
 
 # 解析查单张卡的参数
 async def search_single_card(ctx: SekaiHandlerContext, args: str) -> dict:
@@ -860,14 +860,18 @@ async def compose_card_detail_image(ctx: SekaiHandlerContext, card_id: int):
     skill_type_icon = ctx.static_imgs.get(f"skill_{skill_info.type}.png")
     skill_detail = skill_info.detail
     skill_detail_cn: str = None
-    if ctx.region in NEED_TRANSLATE_REGIONS:
-        for r in TRANSLATED_REGIONS:
+
+    async def get_translated_skill_detail(skill_id: int) -> Optional[str]:
+        for region in filter_enabled_server_regions(TRANSLATED_REGIONS):
             try:
-                skill_info = await get_skill_info(SekaiHandlerContext.from_region(r), card['skillId'], card)
-                skill_detail_cn = skill_info.detail
-                break
-            except:
+                translated_skill = await get_skill_info(SekaiHandlerContext.from_region(region), skill_id, card)
+                return translated_skill.detail
+            except Exception:
                 pass
+        return None
+
+    if ctx.region in NEED_TRANSLATE_REGIONS:
+        skill_detail_cn = await get_translated_skill_detail(card['skillId'])
         if not skill_detail_cn:
             skill_detail_cn = await translate_text(skill_detail, additional_info=SKILL_TRANS_PROMPT, default=None)
     if 'specialTrainingSkillId' in card:
@@ -877,12 +881,7 @@ async def compose_card_detail_image(ctx: SekaiHandlerContext, card_id: int):
         sp_skill_detail = sp_skill_info.detail
         sp_skill_detail_cn: str = None
         if ctx.region in NEED_TRANSLATE_REGIONS:
-            if r in TRANSLATED_REGIONS:
-                try:
-                    sp_skill_info = await get_skill_info(SekaiHandlerContext.from_region(r), card['specialTrainingSkillId'], card)
-                    sp_skill_detail_cn = sp_skill_info.detail
-                except:
-                    pass
+            sp_skill_detail_cn = await get_translated_skill_detail(card['specialTrainingSkillId'])
             if not sp_skill_detail_cn:
                 sp_skill_detail_cn = await translate_text(sp_skill_detail, additional_info=SKILL_TRANS_PROMPT, default=None)
 
@@ -1179,4 +1178,3 @@ async def _(ctx: SekaiHandlerContext):
         await compose_box_image(ctx, ctx.user_id, cards, show_id, show_box, use_after_training),
         low_quality=True,
     ))
-

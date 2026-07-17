@@ -48,4 +48,30 @@ Note: This project is for reference and learning purposes only, and is **not** a
 
 - (Optional) Start the Sekai Deck Recommendation Service: [README.md](./src/services/deck_recommender/README.md)
 
+### NapCat on Windows
 
+When the bot and NapCat run on different machines, NapCat cannot read the bot's
+local `file://` image paths. Set the following option in `config/global.yaml` to
+upload generated images through NapCat's `upload_file_stream` API before sending:
+
+```yaml
+msg_send:
+  image_transport:
+    mode: "napcat_stream"
+    napcat_stream:
+      chunk_size: 65536
+      file_retention_ms: 300000
+      verify_sha256: true
+```
+
+Keep `mode: "file"` to use the original image delivery method.
+
+
+## todolist
+
+1. pjsk b30/b50
+2. pjsk 查曲/定数/完成表
+3. ~~查鸟（lunabot）~~
+4. ~~llm chat/summary~~
+5. ~~nsy 别名/图库~~
+6. gbfr 查输出

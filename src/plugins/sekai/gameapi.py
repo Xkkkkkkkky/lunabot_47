@@ -35,7 +35,8 @@ async def request_gameapi(url: str, method: str = 'GET', data_type: str | None =
             if resp.status != 200:
                 try:
                     detail = await resp.text()
-                    detail = loads_json(detail)['detail']
+                    detail = loads_json(detail)
+                    detail = detail.get('detail', detail)
                 except:
                     pass
                 utils_logger.error(f"请求游戏API后端 {url} 失败: {resp.status} {detail}")

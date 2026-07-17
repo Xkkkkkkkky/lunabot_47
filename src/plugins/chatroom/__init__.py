@@ -92,7 +92,7 @@ async def handle_get_group(cid, group_id):
 async def handle_send_group_msg(cid, group_id, message):
     bot = await aget_group_bot(group_id, raise_exc=True)
     if isinstance(message, str):
-        message=Message(message)
+        message = await prepare_message_for_send(bot, message)
     return await bot.send_group_msg(group_id=int(group_id), message=message)
 
 # 从数据库获取群聊天记录
@@ -181,9 +181,9 @@ async def handle_send_group_msg_split(cid, group_id, md5, is_str):
     del group_msg_segments[cid]
     if get_md5(message) != md5:
         raise Exception("MD5 Verification Failed")
+    bot = await aget_group_bot(group_id, raise_exc=True)
     if not is_str:
         message = loads_json(message)
     else:
-        message = Message(message)
-    bot = await aget_group_bot(group_id, raise_exc=True)
+        message = await prepare_message_for_send(bot, message)
     return await bot.send_group_msg(group_id=int(group_id), message=message)

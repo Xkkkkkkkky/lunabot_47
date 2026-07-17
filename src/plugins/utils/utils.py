@@ -1117,12 +1117,62 @@ async def download_and_convert_svg(svg_url: str) -> Image.Image:
             utils_logger.print_exc(f'下载SVG图片失败')
             return None 
 
+_MARKDOWN_CSS_PATH = Path("data/utils/m2i/m2i.css")
+
+
+def _get_markdown_background_image() -> str:
+    return str(global_config.get(
+        'draw.background_image',
+        '',
+        raise_exc=False,
+    ) or '').strip()
+
+
+def _resolve_markdown_background_url(background_image: str) -> str | None:
+    if not background_image:
+        return None
+    if background_image.startswith(('http://', 'https://', 'file://', 'data:')):
+        return background_image
+
+    path = Path(background_image).expanduser().resolve()
+    if not path.is_file():
+        utils_logger.warning(f'Markdown背景图片不存在: {path}')
+        return None
+    return path.as_uri()
+
+
+def get_markdown_style_signature() -> str:
+    """返回影响 Markdown 渲染样式的签名，用于使图片缓存及时失效。"""
+    background_image = _get_markdown_background_image()
+    parts = [background_image]
+    if background_image and not background_image.startswith(
+        ('http://', 'https://', 'file://', 'data:')
+    ):
+        path = Path(background_image).expanduser().resolve()
+        if path.is_file():
+            parts.append(str(path.stat().st_mtime_ns))
+    if _MARKDOWN_CSS_PATH.is_file():
+        parts.append(str(_MARKDOWN_CSS_PATH.stat().st_mtime_ns))
+    return get_md5('|'.join(parts))
+
+
 async def markdown_to_image(markdown_text: str, width: int = 600) -> Image.Image:
     """
     将markdown文本转换为图片
     """
     async with PlaywrightPage() as page: # WebDriver 返回 Playwright Page
-        css_content = Path("data/utils/m2i/m2i.css").read_text()
+        css_content = _MARKDOWN_CSS_PATH.read_text()
+        background_url = _resolve_markdown_background_url(
+            _get_markdown_background_image()
+        )
+        background_css = ""
+        if background_url:
+            background_css = f"""
+            background-image: url({orjson.dumps(background_url).decode()});
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            """
         try:
             import mistune
             md_renderer = mistune.create_markdown()
@@ -1133,6 +1183,7 @@ async def markdown_to_image(markdown_text: str, width: int = 600) -> Image.Image
         {css_content}
         .markdown-body {{
             padding: 32px;
+            {background_css}
         }}
     </style></head>
     <body class="markdown-body">{html}</body>

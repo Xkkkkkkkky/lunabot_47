@@ -10,14 +10,14 @@ class SekaiGroupSubHelper:
     def __init__(self, id: str, name: str, regions: List[str], hide: bool = False):
         self.id = id
         self.name = name
-        self.regions = regions
+        self.regions = filter_enabled_server_regions(regions)
         self.hide = hide
         self.subs = {
             region: GroupSubHelper(
-                f"{name}({region_name})_群聊",
+                f"{name}({get_region_name(region)})_群聊",
                 file_db,
                 logger,
-            ) for region, region_name in zip(regions, ALL_SERVER_REGION_NAMES)
+            ) for region in self.regions
         }
         SekaiGroupSubHelper.all_subs.append(self)
 
@@ -54,7 +54,7 @@ class SekaiGroupSubHelper:
         msg += "---\n"
         msg += "所有可开启项目:\n"
         for sub in cls.all_subs:
-            if not sub.hide:
+            if not sub.hide and sub.regions:
                 msg += f"{sub.id}: {sub.name}({', '.join(sub.regions)})\n"
         msg += "---\n"
         msg += "使用\"/pjsk开启 英文项目名\"开启订阅\n"
@@ -140,15 +140,15 @@ class SekaiUserSubHelper:
     def __init__(self, id: str, name: str, regions: List[str], related_group_sub: SekaiGroupSubHelper = None, only_one_group=False, hide=False):
         self.id = id
         self.name = name
-        self.regions = regions
+        self.regions = filter_enabled_server_regions(regions)
         self.related_group_sub = related_group_sub
         self.hide = hide
         self.subs = {
             region: GroupUserSubHelper(
-                f"{name}({region_name})_用户",
+                f"{name}({get_region_name(region)})_用户",
                 file_db,
                 logger,
-            ) for region, region_name in zip(regions, ALL_SERVER_REGION_NAMES)
+            ) for region in self.regions
         }
         self.only_one_group = only_one_group
         SekaiUserSubHelper.all_subs.append(self)
@@ -209,7 +209,7 @@ class SekaiUserSubHelper:
         msg += "---\n"
         msg += "所有可订阅项目:\n"
         for sub in cls.all_subs:
-            if not sub.hide:
+            if not sub.hide and sub.regions:
                 msg += f"{sub.id}: {sub.name}({', '.join(sub.regions)})\n"
         msg += "---\n"
         msg += "使用\"/pjsk订阅 项目\"订阅，例如发送\"/cnpjsk订阅 live\"订阅国服live提醒"

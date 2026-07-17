@@ -21,10 +21,10 @@ import rapidfuzz
 import pandas as pd
 
 
-music_group_sub = SekaiGroupSubHelper("music", "新曲通知", ALL_SERVER_REGIONS)
-music_user_sub = SekaiUserSubHelper("music", "新曲@提醒", ALL_SERVER_REGIONS, related_group_sub=music_group_sub)
-apd_group_sub = SekaiGroupSubHelper("apd", "新APD通知", ALL_SERVER_REGIONS)
-apd_user_sub = SekaiUserSubHelper("apd", "新APD@提醒", ALL_SERVER_REGIONS, related_group_sub=apd_group_sub)
+music_group_sub = SekaiGroupSubHelper("music", "新曲通知", ENABLED_SERVER_REGIONS)
+music_user_sub = SekaiUserSubHelper("music", "新曲@提醒", ENABLED_SERVER_REGIONS, related_group_sub=music_group_sub)
+apd_group_sub = SekaiGroupSubHelper("apd", "新APD通知", ENABLED_SERVER_REGIONS)
+apd_user_sub = SekaiUserSubHelper("apd", "新APD@提醒", ENABLED_SERVER_REGIONS, related_group_sub=apd_group_sub)
 
 music_name_retriever = get_text_retriever(f"music_name") 
 
@@ -303,12 +303,13 @@ class SyncMusicAliasConfig:
 # 通过haruki api，同步歌曲别名
 async def sync_music_alias():
     cfg = SyncMusicAliasConfig.get()
+    regions = filter_enabled_server_regions(cfg.regions)
     mids = []
-    for region in cfg.regions:
+    for region in regions:
         ctx = SekaiHandlerContext.from_region(region)
         mids += [m['id'] for m in await ctx.md.musics.get()]
     mids = list(set(mids))
-    logger.info(f"开始从haruki同步 {cfg.regions} 的 {len(mids)} 首歌曲的别名")
+    logger.info(f"开始从haruki同步 {regions} 的 {len(mids)} 首歌曲的别名")
     alias_db = MusicAliasDB.get_instance()
     alias_db.backup()
     async def sync(mid: int) -> bool:
@@ -316,8 +317,7 @@ async def sync_music_alias():
             url = cfg.url.format(mid=mid)
             data = await download_json(url)
             await asyncio.sleep(cfg.sync_batch_interval)  
-            assert data['music_id'] == mid
-            aliases = data['aliases']
+            aliases = data['data']['aliases']
             # 排除韩语别名
             aliases = [a for a in aliases if not any('\uac00' <= c <= '\ud7af' for c in a)]
             added, removed = alias_db.update(mid, aliases, verbose=False)
@@ -330,6 +330,7 @@ async def sync_music_alias():
             return False
         except Exception as e:
             logger.warning(f"同步歌曲 {mid} 的别名失败: {get_exc_desc(e)}")
+            return False
     updated_num = sum(await batch_gather(*[sync(mid) for mid in mids], batch_size=cfg.sync_batch_size))
     logger.info(f"别名同步完成，{updated_num} 首歌曲的别名发生变更")
     
@@ -915,7 +916,7 @@ async def get_valid_musics(ctx: SekaiHandlerContext, leak=False) -> List[Dict]:
 
 # 在所有服务器根据id检索歌曲（优先在ctx.region)
 async def find_music_by_id_all_region(ctx: SekaiHandlerContext, mid: int) -> Optional[Dict]:
-    regions = ALL_SERVER_REGIONS.copy()
+    regions = ENABLED_SERVER_REGIONS.copy()
     regions.remove(ctx.region)
     regions.insert(0, ctx.region)
     for region in regions:
@@ -1501,7 +1502,7 @@ async def get_music_audio_mp3_path(ctx: SekaiHandlerContext, mid: int) -> Option
 # 获取歌曲长度并缓存
 async def get_music_audio_length(ctx: SekaiHandlerContext, mid: int) -> Optional[timedelta]:
     # 尝试从缓存获取
-    key = f"music_audio_lengths.jp_{mid}"
+    key = f"music_audio_lengths.{ctx.region}_{mid}"
     if length := file_db.get(key, None):
         return timedelta(seconds=length)
     # 尝试从music_meta获取
@@ -1512,7 +1513,7 @@ async def get_music_audio_length(ctx: SekaiHandlerContext, mid: int) -> Optional
         # 尝试从音频文件获取
         path = await get_music_audio_mp3_path(ctx, mid)
         if not path:
-            jp_ctx = SekaiHandlerContext.from_region("jp")
+            jp_ctx = SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION)
             path = await get_music_audio_mp3_path(jp_ctx, mid)
         if not path:
             return None
@@ -2348,7 +2349,7 @@ async def new_music_notify():
     notified_musics = file_db.get("notified_new_musics", {})
     updated = False
 
-    for region in ALL_SERVER_REGIONS:
+    for region in ENABLED_SERVER_REGIONS:
         region_name = get_region_name(region)
         ctx = SekaiHandlerContext.from_region(region)
         musics = await ctx.md.musics.get()
@@ -2435,7 +2436,7 @@ async def new_apd_notify():
     SEND_LIMIT = 5
     total_send = 0
 
-    for region in ALL_SERVER_REGIONS:
+    for region in ENABLED_SERVER_REGIONS:
         region_name = get_region_name(region)
         ctx = SekaiHandlerContext.from_region(region)
         musics = await ctx.md.musics.get()

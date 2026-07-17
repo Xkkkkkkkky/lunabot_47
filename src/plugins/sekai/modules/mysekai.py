@@ -28,8 +28,8 @@ from .card import get_character_sd_image
 from ...imgtool import shrink_image
 
 
-MYSEKAI_REGIONS = ['jp', 'tw', 'cn', 'kr', 'en']
-BD_MYSEKAI_REGIONS = ['cn', 'tw', 'kr']
+MYSEKAI_REGIONS = filter_enabled_server_regions(['jp', 'tw', 'cn', 'kr', 'en'])
+BD_MYSEKAI_REGIONS = filter_enabled_server_regions(['cn', 'tw', 'kr'])
 
 bd_msr_sub = SekaiGroupSubHelper("msr", "msr指令权限", BD_MYSEKAI_REGIONS)
 msr_sub = SekaiUserSubHelper("msr", "烤森资源查询自动推送", MYSEKAI_REGIONS, only_one_group=True)
@@ -1276,7 +1276,7 @@ async def get_mysekai_fixture_detail_image_card(ctx: SekaiHandlerContext, fid: i
 
     translated_name = None
     if ctx.region in NEED_TRANSLATE_REGIONS:
-        for r in TRANSLATED_REGIONS:
+        for r in filter_enabled_server_regions(TRANSLATED_REGIONS):
             if r in MYSEKAI_REGIONS:
                 if f := await SekaiHandlerContext.from_region(r).md.mysekai_fixtures.find_by_id(fid):
                     translated_name = f['name']
@@ -2255,7 +2255,7 @@ async def _(ctx: SekaiHandlerContext):
 # MSR自动推送 & MSR订阅更新
 @repeat_with_interval(config.item('mysekai.msr_push_interval_seconds'), 'MSR自动推送', logger)
 async def msr_auto_push():
-    for region in ALL_SERVER_REGIONS:
+    for region in ENABLED_SERVER_REGIONS:
         region_name = get_region_name(region)
         ctx = SekaiHandlerContext.from_region(region)
 

@@ -33,9 +33,26 @@ async def _(ctx: HandlerContext):
         except:
             pass
 
+    if (
+        args
+        and args in help_names
+        and ctx.group_id
+        and args != 'general'
+        and not is_group_service_enabled(args, ctx.group_id)
+    ):
+        return await ctx.asend_reply_msg(
+            f'{args} 服务未启用，需超级管理员启用'
+        )
+
     if not args or args not in help_names:
         service_list_text = ""
         for name, desc in sorted(zip(help_names, help_decs)):
+            if (
+                ctx.group_id
+                and name != 'general'
+                and not is_group_service_enabled(name, ctx.group_id)
+            ):
+                continue
             service_list_text += f"{name} - {desc}\n"
 
         template: str = config.get('template')
@@ -49,8 +66,14 @@ async def _(ctx: HandlerContext):
             doc_path = HELP_DOCS_PATH.format(name=args)
             doc_mtime = os.path.getmtime(doc_path)
             cache_mtime = file_db.get('help_img_cache_mtime', {})
+            cache_signature = get_md5(
+                f'{doc_mtime}:{get_markdown_style_signature()}'
+            )
             cache_path = create_parent_folder(f"data/helper/cache/{args}.png")
-            if Path(cache_path).exists() and doc_mtime <= cache_mtime.get(args, 0):
+            if (
+                Path(cache_path).exists()
+                and cache_mtime.get(args) == cache_signature
+            ):
                 return await ctx.asend_reply_msg(await get_image_cq(cache_path, low_quality=True))
             else:
                 logger.info(f"缓存 {args} 帮助文档不存在或已过期，重新渲染")
@@ -71,7 +94,7 @@ async def _(ctx: HandlerContext):
                     image = await run_in_pool(concat_images, images, 'h')
                 # 保存缓存
                 image.save(cache_path)
-                cache_mtime[args] = doc_mtime
+                cache_mtime[args] = cache_signature
                 file_db.set(f'help_img_cache_mtime', cache_mtime)
                 return await ctx.asend_reply_msg(await get_image_cq(image, low_quality=True))
 
@@ -79,4 +102,3 @@ async def _(ctx: HandlerContext):
             logger.print_exc(f"渲染 {doc_path} 帮助文档失败")
             return await ctx.asend_reply_msg(f"帮助文档渲染失败")
             
-

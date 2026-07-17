@@ -12,6 +12,7 @@ config = Config('alive')
 logger = get_logger("Alive")
 file_db = get_file_db("data/alive/db.json", logger)
 cd = ColdDown(file_db, logger)
+gwl = get_group_white_list(file_db, logger, "alive")
 
 CHECK_INTERVAL_CFG = config.item('check_interval')
 TIME_THRESHOLD_CFG = config.item('time_threshold')
@@ -94,7 +95,7 @@ async def alive_check():
 
 # 测试命令
 alive = CmdHandler(["/alive"], logger)
-alive.check_cdrate(cd)
+alive.check_cdrate(cd).check_wblist(gwl)
 @alive.handle()
 async def _(ctx: HandlerContext):
     st = bot_states.get(int(ctx.bot.self_id))
@@ -124,7 +125,7 @@ async def get_status_image_cq():
 
 
 status = CmdHandler(["status", "状态"], logger, only_to_me=True, block=True)
-status.check_cdrate(cd)
+status.check_cdrate(cd).check_wblist(gwl)
 @status.handle()
 async def _(ctx: HandlerContext):
     return await ctx.asend_msg(await get_status_image_cq())
@@ -141,6 +142,8 @@ async def status_nofify():
         return
     msg = await get_status_image_cq()
     for group_id in status_notify_gwl.get():
+        if not gwl.check_id(group_id):
+            continue
         try:
             await send_group_msg_by_bot(group_id, msg)
         except Exception as e:
@@ -162,6 +165,8 @@ async def _(bot: Bot, event: NoticeEvent):
             return
         if check_group_disabled(event.group_id):
             return
+        if not gwl.check_id(event.group_id):
+            return
         
         poke_reply_interval = timedelta(seconds=config.get('group_poke_reply_interval'))
         t = datetime.now()
@@ -179,4 +184,3 @@ async def _(bot: Bot, event: NoticeEvent):
 
     except:
         logger.print_exc("回复戳失败")
-

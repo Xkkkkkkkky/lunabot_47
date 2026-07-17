@@ -7,7 +7,7 @@ config = Config("water")
 logger = get_logger("Water")
 file_db = get_file_db("data/water/db.json", logger)
 cd = ColdDown(file_db, logger)
-gbl = get_group_black_list(file_db, logger, 'water')
+gwl = get_group_white_list(file_db, logger, 'water')
 
 autowater_gwls = {
     t: get_group_white_list(file_db, logger, f'autowater_{t}', is_service=False)
@@ -222,7 +222,7 @@ async def get_hashes_water_info(group_id, msg_id, hashes):
 # ------------------------------------------ 聊天逻辑 ------------------------------------------ #
 
 water = CmdHandler(['/water', '/watered', '/水果'], logger)
-water.check_group().check_wblist(gbl).check_cdrate(cd)
+water.check_group().check_wblist(gwl).check_cdrate(cd)
 @water.handle()
 async def _(ctx: HandlerContext):
     reply_msg_id = ctx.get_reply_msg_id()
@@ -256,7 +256,7 @@ async def _(ctx: HandlerContext):
 
 
 query_hash = CmdHandler(['/hash'], logger)
-query_hash.check_group().check_cdrate(cd).check_wblist(gbl)
+query_hash.check_group().check_cdrate(cd).check_wblist(gwl)
 @query_hash.handle()
 async def _(ctx: HandlerContext):
     reply_msg = ctx.get_reply_msg()
@@ -275,7 +275,7 @@ async def _(ctx: HandlerContext):
     return await ctx.asend_fold_msg_adaptive(msg.strip())
 
 autowater = CmdHandler(['/autowater', '/自动水果'], logger)
-autowater.check_group().check_wblist(gbl).check_superuser()
+autowater.check_group().check_wblist(gwl).check_superuser()
 @autowater.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
@@ -298,7 +298,7 @@ async def _(ctx: HandlerContext):
         return await ctx.asend_reply_msg("关闭本群的自动水果检测")
 
 water_exclude = CmdHandler(['/water_exclude', '/watered_exclude', '/水果排除'], logger)
-water_exclude.check_group().check_wblist(gbl)
+water_exclude.check_group().check_wblist(gwl)
 @water_exclude.handle()
 async def _(ctx: HandlerContext):
     reply_msg = ctx.get_reply_msg()
@@ -342,7 +342,7 @@ MAX_TASK_NUM = 10
 # 添加HASH记录任务
 @before_record_hook
 async def record_new_message(bot: Bot, event: MessageEvent):
-    if not gbl.check(event, allow_super=False): return
+    if not gwl.check(event, allow_super=False): return
     if not is_group_msg(event): return
     group_id = event.group_id
     nickname = get_user_name_by_event(event)

@@ -15,7 +15,8 @@ def get_user_default_region(user_id: int, fallback: str) -> str:
     """
     user_id = str(user_id)
     default_regions = file_db.get("default_region", {})
-    return default_regions.get(user_id, fallback)
+    region = default_regions.get(user_id)
+    return region if region in ENABLED_SERVER_REGIONS else fallback
 
 def set_user_default_region(user_id: int, region: str):
     """
@@ -41,6 +42,8 @@ class SekaiHandlerContext(HandlerContext):
 
     @classmethod
     def from_region(cls, region: str) -> 'SekaiHandlerContext':
+        if region not in ENABLED_SERVER_REGIONS:
+            raise ValueError(f"区服 {region} 未在 sekai.sekai.region_enabled 中启用")
         ctx = SekaiHandlerContext()
         ctx.region = region
         ctx.md = RegionMasterDataCollection(region)
@@ -57,7 +60,7 @@ class SekaiHandlerContext(HandlerContext):
 
 
 class SekaiCmdHandler(CmdHandler):
-    DEFAULT_AVAILABLE_REGIONS = ALL_SERVER_REGIONS
+    DEFAULT_AVAILABLE_REGIONS = ENABLED_SERVER_REGIONS
 
     def __init__(
         self, 
@@ -68,15 +71,16 @@ class SekaiCmdHandler(CmdHandler):
         parse_data_mode_arg: bool = True,
         **kwargs
     ):
-        self.available_regions = regions or self.DEFAULT_AVAILABLE_REGIONS
+        requested_regions = self.DEFAULT_AVAILABLE_REGIONS if regions is None else regions
+        self.available_regions = filter_enabled_server_regions(requested_regions)
+        kwargs['disabled'] = kwargs.get('disabled', False) or not self.available_regions
         self.prefix_args = sorted(prefix_args or [''], key=lambda x: len(x), reverse=True)
-        all_region_commands = []
+        all_region_commands = list(commands)
         for prefix in self.prefix_args:
-            for region in ALL_SERVER_REGIONS:
-                for cmd in commands:
+            for cmd in commands:
+                all_region_commands.append(cmd.replace("/", f"/{prefix}"))
+                for region in self.available_regions:
                     assert not cmd.startswith(f"/{region}{prefix}")
-                    all_region_commands.append(cmd)
-                    all_region_commands.append(cmd.replace("/", f"/{prefix}"))
                     all_region_commands.append(cmd.replace("/", f"/{region}{prefix}"))
         all_region_commands = list(set(all_region_commands))
         self.original_commands = commands
@@ -89,7 +93,7 @@ class SekaiCmdHandler(CmdHandler):
         with ProfileTimer("sekaihandler.parse_prefix"):
             cmd_region = None
             original_trigger_cmd = context.trigger_cmd
-            for region in ALL_SERVER_REGIONS:
+            for region in ENABLED_SERVER_REGIONS:
                 if context.trigger_cmd.strip().startswith(f"/{region}"):
                     cmd_region = region
                     context.trigger_cmd = context.trigger_cmd.replace(f"/{region}", "/")
@@ -182,7 +186,7 @@ async def _(ctx: HandlerContext):
 
     SET_HELP = f"""
 ---
-使用\"{ctx.trigger_cmd} 区服英文缩写\"设置默认区服，可用的区服有: {', '.join(ALL_SERVER_REGIONS)}
+使用\"{ctx.trigger_cmd} 区服英文缩写\"设置默认区服，可用的区服有: {', '.join(ENABLED_SERVER_REGIONS)}
 """.strip()
 
     if not args:
@@ -200,7 +204,7 @@ async def _(ctx: HandlerContext):
 {SET_HELP}
 """.strip())
         
-    assert_and_reply(args in ALL_SERVER_REGIONS, f"""
+    assert_and_reply(args in ENABLED_SERVER_REGIONS, f"""
 无效的区服参数: {args}
 {SET_HELP}
 """.strip())
@@ -209,5 +213,3 @@ async def _(ctx: HandlerContext):
     return await ctx.asend_reply_msg(f"""
 已设置你的默认区服为: {args}
 """.strip())
-
-

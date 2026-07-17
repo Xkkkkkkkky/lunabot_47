@@ -6,7 +6,7 @@ config = Config('cron.cron')
 logger = get_logger('Cron')
 file_db = get_file_db('data/cron/cron.json', logger)
 cd = ColdDown(file_db, logger)
-gbl = get_group_black_list(file_db, logger, 'cron')
+gwl = get_group_white_list(file_db, logger, 'cron')
 
 # 获取下次提醒时间描述
 def get_task_next_run_time_str(group_id, task_id):
@@ -240,7 +240,7 @@ async def _on_clean_quited_group(groups: CurrentGroupInfoDict):
 
 # 添加cron任务
 cron_add = CmdHandler(["/cron", "/添加提醒", "/cron_add", "/cron add"], logger)
-cron_add.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_add.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_add.handle()
 async def _(ctx: HandlerContext):
     text = ctx.get_args().strip()
@@ -268,7 +268,7 @@ async def _(ctx: HandlerContext):
 
 # 删除任务（仅创建者或超级用户）
 cron_del = CmdHandler(["/删除提醒", "/cron_del", "/cron del"], logger)
-cron_del.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_del.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_del.handle()
 async def _(ctx: HandlerContext):
     task_id = find_task(ctx, check_permission=True)['id']
@@ -279,7 +279,7 @@ async def _(ctx: HandlerContext):
 
 # 清空cron任务（仅超级用户）
 cron_clear = CmdHandler(["/清空提醒", "/cron_clear", "/cron clear"], logger)
-cron_clear.check_cdrate(cd).check_wblist(gbl).check_group().check_superuser()
+cron_clear.check_cdrate(cd).check_wblist(gwl).check_group().check_superuser()
 @cron_clear.handle()
 async def _(ctx: HandlerContext):
     group_tasks = file_db.get(f"tasks_{ctx.group_id}", [])
@@ -291,7 +291,7 @@ async def _(ctx: HandlerContext):
 
 # 列出cron任务
 cron_list = CmdHandler(["/提醒列表", "/cron_list", "/cron list"], logger)
-cron_list.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_list.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_list.handle()
 async def _(ctx: HandlerContext):
     group_tasks = file_db.get(f"tasks_{ctx.group_id}", [])
@@ -303,7 +303,7 @@ async def _(ctx: HandlerContext):
 
 # 订阅cron任务
 cron_sub = CmdHandler(["/订阅提醒", "/cron_sub", "/cron sub"], logger)
-cron_sub.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_sub.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_sub.handle()
 async def _(ctx: HandlerContext):
     msg = ctx.get_msg()
@@ -341,7 +341,7 @@ async def _(ctx: HandlerContext):
 
 # 取消订阅cron任务
 cron_unsub = CmdHandler(["/取消订阅提醒", "/cron_unsub", "/cron unsub"], logger)
-cron_unsub.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_unsub.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_unsub.handle()
 async def _(ctx: HandlerContext):
     msg = ctx.get_msg()
@@ -379,7 +379,7 @@ async def _(ctx: HandlerContext):
     
 # 清空任务订阅者（仅创建者或超级用户）
 cron_unsuball = CmdHandler(["/清空提醒订阅", "/cron_unsuball", "/cron unsuball"], logger)
-cron_unsuball.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_unsuball.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_unsuball.handle()
 async def _(ctx: HandlerContext):
     task = find_task(ctx, check_permission=True)
@@ -390,7 +390,7 @@ async def _(ctx: HandlerContext):
 
 # 查看任务订阅者
 cron_sublist = CmdHandler(["/提醒订阅列表", "/cron_sublist", "/cron sublist"], logger)
-cron_sublist.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_sublist.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_sublist.handle()
 async def _(ctx: HandlerContext):
     task = find_task(ctx, check_permission=False)
@@ -402,7 +402,7 @@ async def _(ctx: HandlerContext):
     
 # 静音任务（仅创建者或超级用户）
 cron_mute = CmdHandler(["/关闭提醒", "/cron_mute", "/cron mute"], logger)
-cron_mute.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_mute.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_mute.handle()
 async def _(ctx: HandlerContext):
     task = find_task(ctx, check_permission=True)
@@ -413,7 +413,7 @@ async def _(ctx: HandlerContext):
 
 # 静音全部任务（仅超级用户）
 cron_muteall = CmdHandler(["/关闭所有提醒", "/cron_muteall", "/cron muteall"], logger)
-cron_muteall.check_cdrate(cd).check_wblist(gbl).check_group().check_superuser()
+cron_muteall.check_cdrate(cd).check_wblist(gwl).check_group().check_superuser()
 @cron_muteall.handle()
 async def _(ctx: HandlerContext):
     group_tasks = file_db.get(f"tasks_{ctx.group_id}", [])
@@ -425,7 +425,7 @@ async def _(ctx: HandlerContext):
     
 # 取消静音任务（仅创建者或超级用户）
 cron_unmute = CmdHandler(["/开启提醒", "/cron_unmute", "/cron unmute"], logger)
-cron_unmute.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_unmute.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_unmute.handle()
 async def _(ctx: HandlerContext):
     task = find_task(ctx, check_permission=True)
@@ -436,7 +436,7 @@ async def _(ctx: HandlerContext):
 
 # 查看自己订阅的任务
 cron_mysub = CmdHandler(["/我的提醒订阅", "/cron_mysub", "/cron mysub"], logger)
-cron_mysub.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_mysub.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_mysub.handle()
 async def _(ctx: HandlerContext):
     group_tasks = file_db.get(f"tasks_{ctx.group_id}", [])
@@ -449,7 +449,7 @@ async def _(ctx: HandlerContext):
 
 # 修改任务文本
 cron_edit = CmdHandler(["/修改提醒", "/cron_edit", "/cron edit"], logger)
-cron_edit.check_cdrate(cd).check_wblist(gbl).check_group()
+cron_edit.check_cdrate(cd).check_wblist(gwl).check_group()
 @cron_edit.handle()
 async def _(ctx: HandlerContext):
     task = find_task(ctx, check_permission=True)

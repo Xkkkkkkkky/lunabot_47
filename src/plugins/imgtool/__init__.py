@@ -10,7 +10,7 @@ config = Config('imgtool')
 logger = get_logger("ImgTool")
 file_db = get_file_db("data/imgtool/db.json", logger)
 cd = ColdDown(file_db, logger)
-gbl = get_group_black_list(file_db, logger, 'imgtool')
+gwl = get_group_white_list(file_db, logger, 'imgtool')
 
 
 # ============================= cpp程序调用 ============================= # 
@@ -430,7 +430,7 @@ async def operate_image(ctx: HandlerContext) -> Image.Image:
 
 # 图片操作Handler
 img_op = CmdHandler(["/img", "/imgtool"], logger, priority=1)
-img_op.check_cdrate(cd).check_wblist(gbl)
+img_op.check_cdrate(cd).check_wblist(gwl)
 @img_op.handle()
 async def _(ctx: HandlerContext):
     await ctx.block(f"{ctx.user_id}", 5)
@@ -438,35 +438,35 @@ async def _(ctx: HandlerContext):
 
 # push图片列表Handler
 img_push = CmdHandler(["/img push", "/imgpush"], logger, priority=1)
-img_push.check_cdrate(cd).check_wblist(gbl)
+img_push.check_cdrate(cd).check_wblist(gwl)
 @img_push.handle()
 async def _(ctx: HandlerContext):
     await add_image_to_list(ctx)
 
 # pop图片列表Handler
 img_pop = CmdHandler(["/img pop", "/imgpop"], logger, priority=1)
-img_pop.check_cdrate(cd).check_wblist(gbl)
+img_pop.check_cdrate(cd).check_wblist(gwl)
 @img_pop.handle()
 async def _(ctx: HandlerContext):
     await pop_image_from_list(ctx)
 
 # 清空图片列表Handler
 img_clear = CmdHandler(["/img clear", "/imgclear"], logger, priority=1)
-img_clear.check_cdrate(cd).check_wblist(gbl)
+img_clear.check_cdrate(cd).check_wblist(gwl)
 @img_clear.handle()
 async def _(ctx: HandlerContext):
     await clear_image_list(ctx)
 
 # 翻转图片列表Handler
 img_reverse = CmdHandler(["/img rev", "/imgrev"], logger, priority=1)
-img_reverse.check_cdrate(cd).check_wblist(gbl)
+img_reverse.check_cdrate(cd).check_wblist(gwl)
 @img_reverse.handle()
 async def _(ctx: HandlerContext):
     await reverse_image_list(ctx)
 
 # 图片操作帮助handler
 img_help = CmdHandler(["/img help", "/imghelp", "/imgh"], logger, priority=1)
-img_help.check_cdrate(cd).check_wblist(gbl)
+img_help.check_cdrate(cd).check_wblist(gwl)
 @img_help.handle()
 async def _(ctx: HandlerContext):
     ops = ImageOperation.all_ops
@@ -1343,7 +1343,7 @@ register_all_ops()
 
 # 检查图片消息
 img_check = CmdHandler(["/img check", '/img_check', '/img info', '/img_info'], logger, priority=1)
-img_check.check_cdrate(cd).check_wblist(gbl)
+img_check.check_cdrate(cd).check_wblist(gwl)
 @img_check.handle()
 async def _(ctx: HandlerContext):
     data_list = await ctx.aget_image_datas()
@@ -1388,7 +1388,7 @@ async def _(ctx: HandlerContext):
 
 # 用pyzbar扫描图像中所有二维码，返回结果
 scan = CmdHandler(["/scan", "/扫描", "/识别"], logger)
-scan.check_cdrate(cd).check_wblist(gbl)
+scan.check_cdrate(cd).check_wblist(gwl)
 @scan.handle()
 async def _(ctx: HandlerContext):
     img = await get_reply_fst_image(ctx)
@@ -1401,7 +1401,7 @@ async def _(ctx: HandlerContext):
 
 # 用qrcode生成二维码
 gen_qrcode = CmdHandler(['/qrcode', '/二维码'], logger)
-gen_qrcode.check_cdrate(cd).check_wblist(gbl)
+gen_qrcode.check_cdrate(cd).check_wblist(gwl)
 @gen_qrcode.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
@@ -1427,7 +1427,7 @@ async def _(ctx: HandlerContext):
 
 # 生成语录
 gen_saying = CmdHandler(['/saying', '/quote', '/语录'], logger)
-gen_saying.check_cdrate(cd).check_wblist(gbl).check_group()
+gen_saying.check_cdrate(cd).check_wblist(gwl).check_group()
 @gen_saying.handle()
 async def _(ctx: HandlerContext):
     text = None
@@ -1474,7 +1474,7 @@ async def _(ctx: HandlerContext):
 
 # 渲染markdown
 md = CmdHandler(['/md', '/markdown'], logger)
-md.check_cdrate(cd).check_wblist(gbl)
+md.check_cdrate(cd).check_wblist(gwl)
 @md.handle()
 async def _(ctx: HandlerContext):
     reply_msg = ctx.get_reply_msg()
@@ -1511,7 +1511,7 @@ def color_card(color, additional_text=None):
 
 # 颜色显示
 color_show = CmdHandler(['/color', '/颜色'], logger)
-color_show.check_cdrate(cd).check_wblist(gbl)
+color_show.check_cdrate(cd).check_wblist(gwl)
 @color_show.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()
@@ -1562,7 +1562,7 @@ async def _(ctx: HandlerContext):
 
 # 取色器
 color_picker = CmdHandler(['/pick', '/取色'], logger, priority=1)
-color_picker.check_cdrate(cd).check_wblist(gbl)
+color_picker.check_cdrate(cd).check_wblist(gwl)
 @color_picker.handle()
 async def _(ctx: HandlerContext):
     img = await get_reply_fst_image(ctx)
@@ -1601,7 +1601,7 @@ async def _(ctx: HandlerContext):
 
 # 视频转gif
 video_to_gif = CmdHandler(['/gif'], logger)
-video_to_gif.check_cdrate(cd).check_wblist(gbl)
+video_to_gif.check_cdrate(cd).check_wblist(gwl)
 @video_to_gif.handle()
 async def _(ctx: HandlerContext):
     parser = ctx.get_argparser()
