@@ -671,9 +671,23 @@ class Painter:
         else:
             with Pilmoji(self.img, source=GoogleEmojiSource) as pilmoji:
                 text_offset = (0, -std_size[1])
-                offset = global_config.get('painter.emoji.offset')
+                configured_offset = global_config.get('painter.emoji.offset')
                 scale = global_config.get('painter.emoji.scale')
-                offset = (int(offset[0] * std_size[1] / 32), int(offset[1] * std_size[1] / 32) - std_size[1])
+                # Pilmoji 会把混排 emoji 的起点叠加到相邻文字的字形顶部，
+                # 纯 emoji 则没有这段偏移。反向抵消实际字形偏移后，两条路径
+                # 都回到相同基线；否则混排 emoji 会比同行文字高近一整行。
+                visible_text = emoji.replace_emoji(text, '')
+                visible_text_offset_y = (
+                    font.getbbox(visible_text, anchor='ls')[1]
+                    if visible_text.strip()
+                    else 0
+                )
+                baseline_offset = -std_size[1] - visible_text_offset_y
+                offset = (
+                    int(configured_offset[0] * std_size[1] / 32),
+                    int(configured_offset[1] * std_size[1] / 32)
+                    + baseline_offset,
+                )
                 pos = (pos[0] - text_offset[0] + self.offset[0], pos[1] - text_offset[1] + self.offset[1])
                 pilmoji.text(
                     pos, text, font=font, fill=fill, align=align, 

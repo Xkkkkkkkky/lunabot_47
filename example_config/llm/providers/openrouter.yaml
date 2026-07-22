@@ -1,11 +1,15 @@
-qps_limit: 5
-quota_sync_interval_sec: 60*60*6
-price_unit: "$"
+# OpenRouter/OpenAI 兼容供应方配置，模型前缀为 or:。
+qps_limit: 5  # 当前进程对该供应方的每秒请求上限
+quota_sync_interval_sec: 60*60*6  # 调用 auth_key_url 刷新余额的间隔
+price_unit: "$"  # 价格和余额日志使用的显示单位
 
-api_key: "xxx"
-base_url: "https://xxx/api/v1"
-auth_key_url: "https://xxx/api/v1/auth/key"
+# API key、兼容端点和余额端点均属于部署信息，只能填写在真实 config。
+api_key: ""
+base_url: ""
+auth_key_url: ""
 
+# name 是 bot 内名称，model_id 是 OpenRouter 实际模型 ID；定价为每 token。
+# is_multimodal 控制图片输入。allow_online 当前只是元数据，不会自动开启联网。
 models:
   - name: "deepseek-r1-free"
     model_id: "deepseek/deepseek-r1-0528:free"

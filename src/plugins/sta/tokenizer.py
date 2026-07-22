@@ -160,20 +160,45 @@ class SmartTokenizer:
         self.stopwords = normalized_stopwords
 
         self.userword_surfaces: dict[str, str] = {}
+        normalized_userwords: list[tuple[str, str]] = []
         for word in userwords:
             surface = normalize_text(word).strip()
             key = normalize_key(surface)
             if key and key not in self.stopwords:
                 self.userword_surfaces[key] = surface
+                normalized_userwords.append((key, surface))
 
         self._jieba = jieba.Tokenizer()
         for surface in self.userword_surfaces.values():
             self._jieba.add_word(surface, tag="n")
+        known_surfaces = {
+            surface: (key, self.userword_surfaces[key], True)
+            for key, surface in normalized_userwords
+            if not LATIN_TOKEN_RE.fullmatch(surface)
+        }
         for word in dictionary_words:
             surface = normalize_text(word).strip()
             key = normalize_key(surface)
-            if key and key not in self.stopwords and key not in self.userword_surfaces:
-                self._jieba.add_word(surface, tag="n")
+            if key and key not in self.stopwords:
+                forced = key in self.userword_surfaces
+                if not forced:
+                    self._jieba.add_word(surface, tag="n")
+                if not LATIN_TOKEN_RE.fullmatch(surface):
+                    known_surfaces.setdefault(
+                        surface,
+                        (
+                            key,
+                            self.userword_surfaces.get(key, surface),
+                            forced,
+                        ),
+                    )
+        self._known_surfaces = known_surfaces
+        known_patterns = sorted(known_surfaces, key=lambda word: (-len(word), word))
+        self._known_term_re = (
+            re.compile("|".join(re.escape(word) for word in known_patterns))
+            if known_patterns
+            else None
+        )
         self._posseg = pseg.POSTokenizer(self._jieba)
 
     def _is_stopped(self, key: str, forced: bool) -> bool:
@@ -188,6 +213,43 @@ class SmartTokenizer:
         text = URL_RE.sub(" ", text)
         text = EMAIL_RE.sub(" ", text)
         candidates: list[TokenCandidate] = []
+
+        # jieba 能可靠保留纯中文用户词，但 STA 会先单独抽取拉丁标识符，且
+        # jieba 对假名、韩文、emoji 等词典项支持有限。先按最长项提取这些
+        # 已知词并挖空原文，避免 NSY 的混合图库名/别名被两条路径拆开或漏掉。
+        if self._known_term_re is not None:
+            chars = list(text)
+            for match in self._known_term_re.finditer(text):
+                surface = match.group(0)
+                key, canonical_surface, forced = self._known_surfaces[surface]
+                start, end = match.span()
+                if (
+                    surface[0].isascii()
+                    and (surface[0].isalnum() or surface[0] == "_")
+                    and start > 0
+                    and text[start - 1].isascii()
+                    and (text[start - 1].isalnum() or text[start - 1] == "_")
+                ):
+                    continue
+                if (
+                    surface[-1].isascii()
+                    and (surface[-1].isalnum() or surface[-1] == "_")
+                    and end < len(text)
+                    and text[end].isascii()
+                    and (text[end].isalnum() or text[end] == "_")
+                ):
+                    continue
+                candidates.append(
+                    TokenCandidate(
+                        key=key,
+                        surface=canonical_surface if forced else surface,
+                        pos="n",
+                        source="dictionary",
+                        forced=forced,
+                    )
+                )
+                chars[start:end] = " " * (end - start)
+            text = "".join(chars)
 
         for match in LATIN_TOKEN_RE.finditer(text):
             surface = match.group(0)

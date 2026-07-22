@@ -34,7 +34,12 @@ from ..draw.plot import (
     Widget,
     WidgetBg,
 )
-from .utils import b64_to_image, download_image, global_config
+from .utils import (
+    b64_to_image,
+    download_image,
+    get_shared_draw_background_image,
+    global_config,
+)
 
 
 RGBA = tuple[int, int, int, int]
@@ -874,7 +879,7 @@ async def resolve_draw_background(
 def get_configured_draw_background_sources(
     module_config: Any = None,
 ) -> tuple[str, str]:
-    """返回插件背景覆盖和 global.yaml 的共享默认背景。"""
+    """返回插件背景覆盖和 ``.env`` 中的共享默认背景。"""
 
     configured = ""
     if module_config is not None:
@@ -886,9 +891,7 @@ def get_configured_draw_background_sources(
             configured = str(
                 module_config.get("background_image", "", raise_exc=False) or ""
             ).strip()
-    inherited = str(
-        global_config.get("draw.background_image", "", raise_exc=False) or ""
-    ).strip()
+    inherited = get_shared_draw_background_image()
     return configured, inherited
 
 
@@ -899,7 +902,7 @@ async def resolve_configured_draw_background(
     logger: Any = None,
     label: str = "报告",
 ) -> WidgetBg:
-    """解析插件级背景；留空时继承 global.yaml 中的 Markdown 背景。"""
+    """解析插件级背景；留空时继承 ``DRAW_BACKGROUND_IMAGE``。"""
 
     configured, inherited = get_configured_draw_background_sources(module_config)
     return await resolve_draw_background(

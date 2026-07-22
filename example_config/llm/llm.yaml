@@ -1,23 +1,26 @@
-chat_max_tokens: null                    # 默认聊天最大生成长度
-chat_model_switch_interval: 1            # 默认的模型失败切换间隔 (s)
-chat_timeout: 180                        # 默认聊天超时时间 (s)
+# LLM 通用调用参数。模型名称统一写成 provider_code:model_name。
+chat_max_tokens: null  # 每次聊天请求的最大输出 token；null 表示交给上游模型决定
+chat_model_switch_interval: 1  # 当前模型失败后，尝试下一个候选前的等待时间（秒）
+chat_timeout: 180  # 每个候选模型单次请求的超时（秒）
 
-text_embedding_models:                    # 可用文本嵌入模型列表
+# 文本嵌入模型是独立注册表；provider 必须是 providers/ 下已注册的供应方代码。
+text_embedding_models:
   - name: "sf-bge-m3"
-    provider: "sf"
-    id: "BAAI/bge-m3"
-    input_pricing:  0.00000000        
-    embed_dim: 1024                       
+    provider: "sf"          # 供应方代码
+    id: "BAAI/bge-m3"       # 发送给上游 API 的模型 ID
+    input_pricing: 0.00000000  # 每个输入 token 的价格
+    embed_dim: 1024          # 向量维度元数据
   - name: "sf-qwen3-embedding-8b"
     provider: "sf"
     id: "Qwen/Qwen3-Embedding-8B"
-    input_pricing:  0.00000004 
+    input_pricing: 0.00000004
     embed_dim: 4096
 
-tts_models:                               # 文本转语音模型列表
+# 文本转语音注册表。当前 tts() 固定查找 name=default；启用前需保证该项存在。
+# input_pricing 当前仅作价格元数据，TTS 调用尚未自动扣减本地额度。
+tts_models:
   - name: "openai-tts"
-    provider: "ay"
-    id: "tts-1"
-    input_pricing:  0.000015               # 每个输入字符的价格
-    voice: "alloy"                         # TTS语音名称
-
+    provider: "ay"       # 供应方代码
+    id: "tts-1"          # 发送给上游 API 的模型 ID
+    input_pricing: 0.000015  # 每个输入字符的价格
+    voice: "alloy"       # 上游支持的音色名称

@@ -818,10 +818,11 @@ class FileDB:
         """
         assert isinstance(key, str), f'key: "{key}" 必须是字符串，当前类型: {type(key)}'
         self._ensure_load()
-        key = key.replace("\.", "&#46;")
+        key = key.replace("\\.", "&#46;")
         keys = key.split('.')
         last_dict = self.data
-        last_key = keys.pop()
+        # 末级键也要还原转义点，否则 ``a.b\.c`` 会错误写成 ``b&#46;c``。
+        last_key = keys.pop().replace("&#46;", ".")
         for k in keys:
             k = k.replace("&#46;", ".")
             if k not in last_dict or not isinstance(last_dict[k], dict):
@@ -1121,11 +1122,7 @@ _MARKDOWN_CSS_PATH = Path("data/utils/m2i/m2i.css")
 
 
 def _get_markdown_background_image() -> str:
-    return str(global_config.get(
-        'draw.background_image',
-        '',
-        raise_exc=False,
-    ) or '').strip()
+    return get_shared_draw_background_image()
 
 
 def _resolve_markdown_background_url(background_image: str) -> str | None:

@@ -63,6 +63,7 @@ from . import (
 STATS_CANVAS_WIDTH = 1440
 STATS_SUMMARY_HEIGHT = 500
 BAR_ROW_HEIGHT = 29
+FORMAT_PIE_HEIGHT = 250
 
 PREVIEW_CANVAS_WIDTH = 1120
 PREVIEW_COLUMN_COUNT = 4
@@ -160,6 +161,8 @@ class GalleryPreviewItem:
     pid: int
     path: str
     related_galleries: tuple[str, ...] = ()
+    format: str = ''
+    size: int = 0
 
 
 @dataclass(frozen=True)
@@ -188,6 +191,14 @@ class ImageDetail:
     related_galleries: tuple[str, ...] = ()
     link_root_pid: int | None = None
     linked_record_count: int = 1
+
+
+@dataclass(frozen=True)
+class FormatSize:
+    """一种图片格式及其文件大小总和。"""
+
+    name: str
+    size: int
 
 
 def _draw_text(
@@ -264,6 +275,47 @@ def _nice_axis(max_value: int) -> tuple[int, list[int]]:
     step = max(1, int(factor * magnitude))
     axis_max = max(step, math.ceil(max_value / step) * step)
     return axis_max, list(range(0, axis_max + 1, step))
+
+
+def _format_file_size(size: int) -> str:
+    """以简短的二进制单位显示文件体积。"""
+
+    value = float(max(0, size))
+    units = ('B', 'KiB', 'MiB', 'GiB', 'TiB')
+    for index, unit in enumerate(units):
+        if value < 1024 or index == len(units) - 1:
+            if index == 0:
+                return f'{int(value)} {unit}'
+            precision = 1 if value >= 100 else 2
+            return f'{value:.{precision}f} {unit}'
+        value /= 1024
+    raise AssertionError('unreachable')
+
+
+def _normalize_image_format(format_name: str, path: str = '') -> str:
+    """规范格式名；兼容旧索引中格式字段为空的记录。"""
+
+    normalized = str(format_name or '').strip().upper()
+    if not normalized and path:
+        normalized = Path(path).suffix.lstrip('.').upper()
+    if normalized in {'JPG', 'JPE'}:
+        normalized = 'JPEG'
+    return normalized or '未知'
+
+
+def _aggregate_format_sizes(
+    items: Sequence[tuple[str, str, int]],
+) -> list[FormatSize]:
+    """按真实图片格式汇总非负的索引文件大小。"""
+
+    totals: dict[str, int] = {}
+    for format_name, path, size in items:
+        name = _normalize_image_format(format_name, path)
+        totals[name] = totals.get(name, 0) + max(0, int(size))
+    return [
+        FormatSize(name, size)
+        for name, size in sorted(totals.items(), key=lambda item: (-item[1], item[0]))
+    ]
 
 
 def _load_contained_image(
@@ -555,6 +607,172 @@ def _statistics_summary_widget(counts: Sequence[GalleryCount], width: int) -> Sp
     return widget
 
 
+def _format_chart_color(index: int) -> tuple[int, int, int, int]:
+    return CATEGORY_COLORS[index % len(CATEGORY_COLORS)]
+
+
+def _draw_format_size_pie(
+    painter: Painter,
+    width: int,
+    height: int,
+    entries: tuple[FormatSize, ...],
+) -> None:
+    """绘制与 STA 同风格的紧凑环形饼图及格式图例。"""
+
+    total = sum(entry.size for entry in entries)
+    donut_size = min(190, height - 36)
+    donut_x = 28
+    donut_y = (height - donut_size) // 2
+    center_x = donut_x + donut_size // 2
+    center_y = donut_y + donut_size // 2
+
+    if total <= 0:
+        painter.pieslice(
+            (donut_x, donut_y),
+            (donut_size, donut_size),
+            0,
+            360,
+            OTHER_CHART_COLOR,
+        )
+    else:
+        current_angle = -90.0
+        for index, entry in enumerate(entries):
+            angle = 360 * entry.size / total
+            painter.pieslice(
+                (donut_x, donut_y),
+                (donut_size, donut_size),
+                current_angle,
+                current_angle + angle,
+                _format_chart_color(index),
+                stroke=(255, 255, 255, 255),
+                stroke_width=2,
+            )
+            current_angle += angle
+
+    inner_size = round(donut_size * 0.55)
+    inner_offset = (donut_size - inner_size) // 2
+    painter.pieslice(
+        (donut_x + inner_offset, donut_y + inner_offset),
+        (inner_size, inner_size),
+        0,
+        360,
+        (255, 255, 255, 255),
+    )
+    _draw_text(
+        painter,
+        _format_file_size(total),
+        center_x,
+        center_y - 21,
+        font=DEFAULT_BOLD_FONT,
+        size=18,
+        color=NSY_DRAW_THEME.text_primary,
+        align='center',
+    )
+    _draw_text(
+        painter,
+        '总大小',
+        center_x,
+        center_y + 9,
+        size=13,
+        color=NSY_DRAW_THEME.text_muted,
+        align='center',
+    )
+
+    legend_x = donut_x + donut_size + 48
+    legend_width = max(1, width - legend_x)
+    if not entries:
+        _draw_text(
+            painter,
+            '暂无文件大小数据',
+            legend_x,
+            height // 2 - 10,
+            size=16,
+            color=NSY_DRAW_THEME.text_muted,
+        )
+        return
+
+    column_count = 2 if len(entries) > 3 and legend_width >= 520 else 1
+    column_gap = 34
+    column_width = (
+        legend_width - column_gap * (column_count - 1)
+    ) // column_count
+    row_count = math.ceil(len(entries) / column_count)
+    row_height = min(68, max(52, (height - 20) // max(1, row_count)))
+    content_height = row_count * row_height
+    legend_top = max(5, (height - content_height) // 2)
+
+    for index, entry in enumerate(entries):
+        row = index // column_count
+        column = index % column_count
+        x = legend_x + column * (column_width + column_gap)
+        y = legend_top + row * row_height
+        color = _format_chart_color(index)
+        painter.roundrect((x, y + 3), (15, 15), color, radius=5)
+        _draw_text(
+            painter,
+            entry.name,
+            x + 25,
+            y,
+            font=DEFAULT_BOLD_FONT,
+            size=15,
+            color=NSY_DRAW_THEME.text_primary,
+        )
+        _draw_text(
+            painter,
+            _format_file_size(entry.size),
+            x + column_width,
+            y,
+            size=14,
+            color=NSY_DRAW_THEME.text_secondary,
+            align='right',
+        )
+
+        bar_y = y + 30
+        painter.roundrect(
+            (x, bar_y),
+            (column_width, 8),
+            (226, 234, 240, 210),
+            radius=999,
+        )
+        percentage = entry.size / total if total else 0
+        if percentage > 0:
+            painter.roundrect(
+                (x, bar_y),
+                (max(4, round(column_width * percentage)), 8),
+                color,
+                radius=999,
+            )
+        _draw_text(
+            painter,
+            f'{percentage * 100:.1f}%',
+            x + column_width,
+            y + 42,
+            size=12,
+            color=NSY_DRAW_THEME.text_muted,
+            align='right',
+        )
+
+
+def _format_size_pie_widget(
+    entries: Sequence[FormatSize],
+    width: int,
+) -> Spacer:
+    """把格式大小环形图封装为可复用于全局与局部图库的 draw 控件。"""
+
+    frozen_entries = tuple(sorted(
+        entries,
+        key=lambda entry: (-entry.size, entry.name),
+    ))
+    return Spacer(width, FORMAT_PIE_HEIGHT).add_draw_func(
+        lambda _, painter: _draw_format_size_pie(
+            painter,
+            width,
+            FORMAT_PIE_HEIGHT,
+            frozen_entries,
+        )
+    )
+
+
 def _draw_bar_chart(
     painter: Painter,
     width: int,
@@ -690,6 +908,7 @@ def _bar_chart_widget(
 
 async def _render_gallery_statistics(
     counts: Sequence[GalleryCount],
+    format_sizes: Sequence[FormatSize],
 ) -> Image.Image:
     """
     将完整 NSY 图库统计渲染为一张自适应高度的长图。
@@ -710,7 +929,7 @@ async def _render_gallery_statistics(
     ) as canvas:
         with create_report_column(STATS_CONTENT_WIDTH, gap=17, theme=NSY_DRAW_THEME):
             report_header(
-                'NSY 图库统计',
+                '图库统计',
                 width=STATS_CONTENT_WIDTH,
                 eyebrow='GALLERY OVERVIEW',
                 meta=f'{len(ordered_counts):,} 个图库 · {total:,} 张图片',
@@ -724,7 +943,7 @@ async def _render_gallery_statistics(
                 )
 
             report_section_title(
-                '各图库图片数量',
+                '图片数量',
                 width=STATS_CONTENT_WIDTH,
                 theme=NSY_DRAW_THEME,
             )
@@ -732,6 +951,17 @@ async def _render_gallery_statistics(
                 _bar_chart_widget(
                     ordered_counts,
                     ordered_counts,
+                    STATS_CONTENT_WIDTH - 44,
+                )
+
+            report_section_title(
+                '文件大小',
+                width=STATS_CONTENT_WIDTH,
+                theme=NSY_DRAW_THEME,
+            )
+            with report_card(STATS_CONTENT_WIDTH, padding=22, theme=NSY_DRAW_THEME):
+                _format_size_pie_widget(
+                    format_sizes,
                     STATS_CONTENT_WIDTH - 44,
                 )
     return await canvas.get_img()
@@ -784,6 +1014,10 @@ async def _render_gallery_preview(
         _prepare_gallery_preview_items,
         tuple(items),
     )
+    format_sizes = _aggregate_format_sizes(tuple(
+        (item.format, item.path, item.size)
+        for item in items
+    ))
     alias_text = ' / '.join(aliases)
     background = await resolve_configured_draw_background(
         config, theme=NSY_DRAW_THEME, logger=logger, label="图库预览"
@@ -814,17 +1048,18 @@ async def _render_gallery_preview(
             ):
                 for item in prepared:
                     _preview_tile(item)
+
+            report_section_title(
+                '文件格式大小占比',
+                width=PREVIEW_CONTENT_WIDTH,
+                theme=NSY_DRAW_THEME,
+            )
+            with report_card(PREVIEW_CONTENT_WIDTH, padding=22, theme=NSY_DRAW_THEME):
+                _format_size_pie_widget(
+                    format_sizes,
+                    PREVIEW_CONTENT_WIDTH - 44,
+                )
     return await canvas.get_img()
-
-
-def _format_file_size(size: int) -> str:
-    """以简短单位显示文件体积。"""
-
-    if size < 1024:
-        return f'{size} B'
-    if size < 1024 * 1024:
-        return f'{size / 1024:.1f} KiB'
-    return f'{size / 1024 / 1024:.2f} MiB'
 
 
 def _detail_info_cell(label: str, value: str, width: int) -> Frame:
@@ -897,7 +1132,7 @@ async def _render_image_detail(
             report_header(
                 f'PID {detail.pid}',
                 width=DETAIL_CONTENT_WIDTH,
-                eyebrow='NSY 单图查询',
+                eyebrow='单图查询',
                 meta=f'图库 · {detail.gallery}',
                 theme=NSY_DRAW_THEME,
             )
@@ -962,6 +1197,7 @@ async def _render_image_detail(
 
 async def render_gallery_statistics(
     counts: Sequence[GalleryCount],
+    format_sizes: Sequence[FormatSize] = (),
     *,
     group_id: int | str | None = None,
 ) -> Image.Image:
@@ -969,7 +1205,7 @@ async def render_gallery_statistics(
 
     token = _NSY_STYLE_CONTEXT.set(_resolve_nsy_style(group_id))
     try:
-        return await _render_gallery_statistics(counts)
+        return await _render_gallery_statistics(counts, format_sizes)
     finally:
         _NSY_STYLE_CONTEXT.reset(token)
 
@@ -1056,6 +1292,22 @@ def _gallery_counts(manager: NsyManager) -> list[GalleryCount]:
     ]
 
 
+def _gallery_format_sizes(
+    manager: NsyManager,
+    gallery: str | None = None,
+) -> list[FormatSize]:
+    """按 `/查图库` 的文件项口径汇总全局或单库的格式大小。"""
+
+    images = (
+        manager.images_by_gallery.get(gallery, {}).values()
+        if gallery is not None else manager.images_by_pid.values()
+    )
+    return _aggregate_format_sizes(tuple(
+        (image.format, image.filename, image.size)
+        for image in images
+    ))
+
+
 def _gallery_preview_items(
     manager: NsyManager,
     gallery: str,
@@ -1094,6 +1346,8 @@ def _gallery_preview_items(
             related_galleries=(
                 related_galleries if len(related_galleries) > 1 else ()
             ),
+            format=image.format,
+            size=image.size,
         ))
     return items
 
@@ -1163,6 +1417,7 @@ async def _(ctx: HandlerContext):
     await ctx.block('nsy:gallery-query:all')
     report = await render_gallery_statistics(
         _gallery_counts(manager),
+        _gallery_format_sizes(manager),
         group_id=ctx.group_id,
     )
     await ctx.asend_reply_msg(
@@ -1190,7 +1445,7 @@ async def _(ctx: HandlerContext):
 
         images = manager.find_images_by_hash(image_hash)
         if not images:
-            return await ctx.asend_reply_msg('该图片不在 NSY 索引中')
+            return await ctx.asend_reply_msg('该图片不在索引中')
         # 同一文件可能链接到多个图库；优先选择仍可读取的根记录，
         # 再按 PID 稳定选择，避免失效根遮住可用的链接记录。
         image = min(
@@ -1234,6 +1489,7 @@ async def _(ctx: HandlerContext):
 
 
 __all__ = [
+    'FormatSize',
     'GalleryCount',
     'GalleryPreviewItem',
     'ImageDetail',

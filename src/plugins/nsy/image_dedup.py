@@ -256,7 +256,8 @@ async def render_similarity_report(
                     '绿色-根文件；蓝色-转为链接；'
                     '红色-删除。'
                     if show_decisions else
-                    '红色-同图库相似图片，拒绝添加；蓝色-跨图库相似图片，确认可创建链接。'
+                    '红色-同图库相似图片，拒绝添加；'
+                    '蓝色-跨图库相似图片，已自动创建链接。'
                 )
                 TextBox(
                     description,

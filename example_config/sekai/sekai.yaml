@@ -1,4 +1,14 @@
+# PJsk 总开关。关闭后不导入 sekai.modules，但通用绘图素材仍可由其他模块使用。
+enabled: false
 debug: false
+
+# enabled=false 时不使用；若以后重新开启，默认只启用日服以满足源码校验。
+region_enabled:
+  jp: true
+  en: false
+  tw: false
+  kr: false
+  cn: false
 
 gameapi_token: xxx
 

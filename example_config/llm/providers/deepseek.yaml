@@ -1,0 +1,24 @@
+# DeepSeek 的 OpenAI 兼容供应方配置，模型前缀为 ds:。
+qps_limit: 5  # 当前进程对该供应方的每秒请求上限
+# 余额同步检查间隔；该供应方当前不支持自动查余额，可填整数或四则运算表达式。
+quota_sync_interval_sec: 21600
+price_unit: "$"  # 价格和本地余额日志使用的显示单位
+# api_key 与自定义 base_url 均属于私密部署信息，只能填写在真实 config。
+api_key: ""
+base_url: "https://api.deepseek.com"
+
+models:
+  # name 是 bot 内模型名；model_id 省略时直接把 name 发给上游。
+  # max_token 是上下文容量元数据，当前调用层不会按它自动裁剪会话。
+  # 定价支持 "金额/Token数" 字符串，加载时换算为每 token 价格。
+  - name: "deepseek-v4-flash"
+    max_token: 1000000      # 上下文容量元数据
+    is_multimodal: false    # false 时含图片的会话会在请求前被拒绝
+    input_pricing: "0.14/1000000"
+    output_pricing: "0.28/1000000"
+
+  - name: "deepseek-v4-pro"
+    max_token: 1000000
+    is_multimodal: false
+    input_pricing: "1.74/1000000"
+    output_pricing: "3.48/1000000"

@@ -1,47 +1,42 @@
-basic_chat_mm: gg:gemini-2.5-flash-thinking
+# 模型预设把业务用途映射到 provider_code:model_name。
+# 字符串表示单模型，列表表示按顺序失败回退；"&路径" 是项目自定义引用语法，
+# 不是 YAML anchor，必须保留引号。引用路径使用点号访问本文件中的其他键。
+basic_chat_text: ds:deepseek-v4-flash  # 通用纯文本模型别名
+basic_chat_mm: mi:mimo-v2.5           # 通用图片理解模型别名
 
-translation: 
-  - gg:gemini-2.5-flash
-  - na:gemini-2.5-flash
-  - ay:gemini-2.5-flash
-
-translator: gg:gemini-2.5-flash
+# 短文本翻译的失败回退列表。
+translation:
+  - "&basic_chat_text"
+# 图片 OCR 翻译器用于合并、翻译和校对文本框；启用时模型必须支持图片输入。
+translator: "&basic_chat_text"
 
 chat:
-  image_caption: gg:gemini-2.5-flash-lite
-
+  image_caption: "&basic_chat_mm"  # 将收到的图片概括为文字
   private:
-    text: "&basic_chat_mm"
-    mm: "&basic_chat_mm"
-    tool: "&basic_chat_mm"
-    image: or:gemini-2.5-flash-image
-  
+    text: "&basic_chat_text"  # 私聊纯文本模式
+    mm: "&basic_chat_mm"      # 私聊多模态输入模式
+    tool: "&basic_chat_text"  # 私聊工具调用/结构化输出模式
+    # 当前两家模型均不提供图片生成；保留键以满足 chat 的完整模式结构。
+    image: "&basic_chat_mm"
   group:
-    text: "&basic_chat_mm"
-    mm: "&basic_chat_mm"
-    tool: "&basic_chat_mm"
-    image: or:gemini-2.5-flash-image-free
+    text: "&basic_chat_text"  # 群聊纯文本模式
+    mm: "&basic_chat_mm"      # 群聊多模态输入模式
+    tool: "&basic_chat_text"  # 群聊工具调用/结构化输出模式
+    image: "&basic_chat_mm"   # 图片生成占位；所选模型不支持时会拒绝调用
 
-cron: 
-  - gg:gemini-2.5-flash
-  - na:gemini-2.5-flash
-  - ay:gemini-2.5-flash
-  - or:gemini-2.5-flash
+# Cron 任务生成文本时使用的失败回退列表。
+cron:
+  - "&basic_chat_text"
 
+bird:
+  query: "&basic_chat_text"  # /查鸟 的名称规范化模型
+
+# PJsk 已由 sekai/sekai.yaml 的 enabled 总开关关闭；以下预设只保留结构完整性。
 sekai:
-  stamp_cutout:
-    - or:gemini-2.5-flash-image
-    - or:gemini-2.5-flash-image
-
+  stamp_cutout:  # 表情裁切所需的图片模型回退列表
+    - "&basic_chat_mm"
   story_summary:
-    event: 
-      - gg:gemini-2.5-flash
-      - na:gemini-2.5-flash
-      - ay:gemini-2.5-flash
-      - or:gemini-2.5-flash
-    card: 
-      - gg:gemini-2.5-flash
-      - na:gemini-2.5-flash
-      - ay:gemini-2.5-flash
-      - or:gemini-2.5-flash
-
+    event:  # 活动剧情摘要模型回退列表
+      - "&basic_chat_text"
+    card:   # 卡牌剧情摘要模型回退列表
+      - "&basic_chat_text"

@@ -1,12 +1,18 @@
-qps_limit: 5
+# Google 原生 generateContent 供应方配置，模型前缀为 gg:。
+qps_limit: 5  # 当前进程对该供应方的每秒请求上限
+# 该供应方当前不支持自动查余额；间隔仍用于统一的本地额度检查流程。
 quota_sync_interval_sec: 60*60*6
-price_unit: "$"
+price_unit: "$"  # 价格和本地余额日志使用的显示单位
 
+# 可选 HTTP 参数：base_url、api_version、proxy、timeout；私有地址只写在 config。
 http_options:
-  base_url: "xxx"
+  base_url: ""  # 留空时使用代码内置的 Google 官方地址
 
-api_key: "xxx"
+# API key 属于隐私信息，只能填写在真实 config。
+api_key: ""
 
+# name 是 bot 内名称，model_id 是发送给 Google 的模型 ID；is_multimodal
+# 控制是否允许图片输入。client_kwargs 会原样传入当前 Google 客户端。
 models:
 
   # ============= 2.5 models ============= #
@@ -32,8 +38,7 @@ models:
     is_multimodal: true
     client_kwargs:
       thinking_config:
-        include_thoughts: true
-        include_thoughts: false
+        include_thoughts: false  # 普通 Flash 预设不返回思考内容
 
   - name: "gemini-2.5-flash-thinking"
     model_id: "models/gemini-2.5-flash"
@@ -107,6 +112,7 @@ models:
     is_multimodal: true
 
   # ============= imagen models ============= #
+  # image_response=true 表示该模型可请求图片输出，而不只是理解输入图片。
 
   - name: "gemini-2-flash-image"
     model_id: "models/gemini-2.0-flash-preview-image-generation"

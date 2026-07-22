@@ -1,16 +1,21 @@
-qps_limit: 5
-quota_sync_interval_sec: 60*60*6
-price_unit: "$"
+# AI-YYDS 的 OpenAI 兼容供应方配置，模型前缀为 ay:。
+qps_limit: 5  # 当前进程对该供应方的每秒请求上限
+quota_sync_interval_sec: 60*60*6  # 自动查询余额的间隔；支持简单四则运算
+price_unit: "$"  # 价格和余额日志使用的显示单位
 
-api_key: "xxx"
-base_url: "https://xxx/v1"
+# API 凭据、站点地址和登录凭据均属于隐私信息，只能填写在真实 config。
+api_key: ""
+base_url: ""
 
-login_url: "https://xxx/login"
-username: "xxx"
-password: "xxx"
+# 下列网页登录信息用于 Playwright 获取余额查询 cookie，不参与模型请求认证。
+login_url: ""
+username: ""
+password: ""
 
-quota_url: "https://xxx/api/user/self"
+quota_url: ""  # 返回当前账号余额的接口
 
+# 模型公共字段：name 为 bot 内名称，model_id 省略时使用 name；
+# input/output_pricing 均为每 token 价格，is_multimodal 控制是否允许图片输入。
 models:
   - name: "gpt-5"
     input_pricing: 0.000001875
@@ -55,6 +60,7 @@ models:
   - name: "o3-mini"
     input_pricing: 0.00000165
     output_pricing: 0.0000066
+    # data 目前只是模型元数据，不会转发给 API；请求参数应放 client_kwargs/extra_body。
     data:
       reasoning_effort: "high"
 

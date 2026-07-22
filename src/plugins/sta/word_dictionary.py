@@ -1,16 +1,18 @@
-"""持久化 LLM 明确确认的 STA 辅助分词词典。"""
+"""读取和维护 STA 使用的外部辅助分词词典。"""
 
 from __future__ import annotations
 
 from datetime import datetime
+import os.path as osp
 from typing import Iterable, Sequence
 
-from ..utils import get_file_db, get_logger
+from ..utils import get_file_db, get_logger, load_json
 from .tokenizer import GENERIC_WORDS, normalize_key, normalize_text
 
 
 logger = get_logger("Sta")
 dictionary_db = get_file_db("data/sta/llm_words.json", logger)
+NSY_ALIASES_FILE = "data/nsy/aliases.json"
 
 DICTIONARY_VERSION = 1
 MAX_DICTIONARY_WORDS = 2000
@@ -57,6 +59,53 @@ def get_llm_dictionary_words(
             continue
         words_by_key[key] = surface
     return sorted(words_by_key.values(), key=normalize_key)
+
+
+def get_nsy_dictionary_words(
+    *,
+    stopwords: Sequence[str] = (),
+) -> list[str]:
+    """从 NSY alias 总表读取规范图库名和别名，供 STA 分词使用。"""
+
+    if not osp.exists(NSY_ALIASES_FILE):
+        return []
+    try:
+        alias_index = load_json(NSY_ALIASES_FILE)
+    except Exception as exc:
+        logger.warning(
+            f"STA读取NSY别名表失败，忽略图库词典: {type(exc).__name__}: {exc}"
+        )
+        return []
+    if not isinstance(alias_index, dict):
+        logger.warning("STA读取NSY别名表失败，忽略图库词典: 根节点不是对象")
+        return []
+
+    stopped_keys = {normalize_key(word) for word in stopwords}
+    words: set[str] = set()
+
+    def add_word(raw_word: object) -> None:
+        surface = normalize_text(str(raw_word or "")).strip()
+        key = normalize_key(surface)
+        # NSY 命令本身不允许名称含空白；这里再次过滤，避免人工损坏的
+        # aliases.json 把换行写入 jieba 用户词典格式。
+        if (
+            key
+            and key not in stopped_keys
+            and not any(ch.isspace() for ch in surface)
+        ):
+            words.add(surface)
+
+    for gallery, data in alias_index.items():
+        add_word(gallery)
+        if not isinstance(data, dict):
+            continue
+        aliases = data.get("aliases", [])
+        if not isinstance(aliases, list):
+            continue
+        for alias in aliases:
+            add_word(alias)
+
+    return sorted(words, key=lambda word: (normalize_key(word), word))
 
 
 def record_llm_dictionary_words(

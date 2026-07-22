@@ -1,0 +1,34 @@
+# GBFR 并非默认必需服务；未运行 GBFR ACT 时应关闭，避免反复连接不存在的 WebSocket。
+battle:
+  idle_check_interval_seconds: 15
+  idle_finish_seconds: 120
+  min_damage: 0
+  ignore_non_party_sources: true
+  ignored_target_type_ids: []
+
+websocket:
+  enable: false
+  url: "ws://127.0.0.1:24399"
+  heartbeat_seconds: 30
+  reconnect_seconds: 5
+  error_log_limit: 5
+
+storage:
+  base_dir: "data/gbfr"
+  keep_battles: 100
+
+subscribe:
+  auto_send: true
+  auto_send_delay_seconds: 1
+
+render:
+  width: 1280
+  background: ""
+  background_color: "#182029"
+  chart_bucket_seconds: 2
+  top_actor_count: 4
+  top_action_count: 5
+  show_username: true
+  font_path: ""                         # 留空时继承 global.font.path
+  low_quality: true
+

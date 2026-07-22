@@ -1,0 +1,24 @@
+# NSY 本地图库设置。图库本体位于 data/nsy/<图库名>/。
+max_name_length: 64  # 图库名与别名的最大字符数；名称还会拒绝空白和路径特殊字符
+max_image_size_mb: 20  # 单张上传图片的文件大小上限（MiB）
+max_upload_images: 60  # 一次 /加图 或 /强制加图最多读取的附件数
+# Pillow 识别出的真实格式白名单，与文件扩展名无关；名称须使用大写。
+allowed_formats: ["JPEG", "PNG", "GIF", "WEBP", "BMP"]
+
+# 随机看图最终权重 = 格式权重 × 链接图权重 × 近期图片降权。
+# 权重必须为非负数；设为 0 可排除该类图片，未列出的格式按 1.0 处理。
+random_weights:
+  formats:
+    JPEG: 1.0
+    PNG: 1.0
+    GIF: 1.0
+    WEBP: 1.0
+    BMP: 1.0
+  linked_image: 0.5  # 已链接或被链接的重复/相似图片所乘的系数
+  # 从“最近一次”开始依次降权；列表长度同时决定记忆窗口大小。
+  recent_images: [0.05, 0.15, 0.3, 0.4, 0.5]
+
+# pHash 汉明距离的严格上界：distance < threshold 才视为相似；范围 1～64。
+phash_distance_threshold: 3
+default_log_query_count: 10  # /查询图库日志 未给数量时返回的条数
+max_log_query_count: 50      # 单次日志查询允许的最大条数

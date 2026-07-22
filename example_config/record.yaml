@@ -1,1 +1,3 @@
-insert_msg_loop_interval_seconds: 2  # 向数据库插入消息记录循环间隔时间（秒）
+# Record 先把收到的消息放入内存队列，再按此间隔批量写入 SQLite。
+# 间隔越短，异常退出时可能丢失的队列越少，但数据库写入会更频繁。
+insert_msg_loop_interval_seconds: 2

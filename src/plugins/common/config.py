@@ -37,7 +37,8 @@ class _GlobalConfigState:
             print(f"配置文件 {path} 不存在，跳过加载")
             return
         try:
-            mtime = int(os.path.getmtime(path))
+            # 使用纳秒时间戳，避免编辑器在同一秒内连续保存时漏掉热重载。
+            mtime = os.stat(path).st_mtime_ns
             if force_load or name not in cls._cache or cls._cache[name].mtime != mtime:
                 with open(path, 'r', encoding='utf-8') as f:
                     data = yaml.safe_load(f) or {}
@@ -168,3 +169,33 @@ def parse_cfg_num(x: str) -> Union[int, float]:
 
 global_config = Config('global')
 
+
+def get_nonebot_env_config(name: str, default=None) -> Any:
+    """读取 NoneBot 合并后的系统环境变量与 ``.env`` 配置。
+
+    NoneBot/Pydantic 会把自定义环境变量规范化为小写字段，但不会把
+    ``.env`` 内容写回 ``os.environ``，因此不能用 ``os.getenv`` 读取。
+    """
+    try:
+        from nonebot import get_driver
+        return getattr(get_driver().config, name.strip().lower(), default)
+    except ValueError:
+        # 允许配置模块在 NoneBot 初始化前被独立工具导入。
+        return default
+
+
+def get_shared_draw_background_image() -> str:
+    """返回通用绘图背景路径，优先使用 ``DRAW_BACKGROUND_IMAGE``。
+
+    ``global.draw.background_image`` 仅作为旧部署迁移兼容项；一旦
+    ``DRAW_BACKGROUND_IMAGE`` 存在（包括显式留空），就以环境配置为准。
+    """
+    missing = object()
+    value = get_nonebot_env_config('DRAW_BACKGROUND_IMAGE', missing)
+    if value is not missing:
+        return str(value or '').strip()
+    return str(global_config.get(
+        'draw.background_image',
+        '',
+        raise_exc=False,
+    ) or '').strip()

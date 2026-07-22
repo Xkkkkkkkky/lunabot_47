@@ -1,6 +1,33 @@
-statistic_time: [23, 50, 00]  # 自动发送统计时间 [hour, minute, second]
-name_len_limit: 16            # 用户名长度限制
-pie_topk: 9                   # 饼图显示的前k名
-plot_topk: 5                  # 折线图显示的前k名
-plot_interval: 15             # 折线图的时间间隔（分钟）
-sta_word_topk: 8              # 词汇统计显示前k个用户
+# STA 依赖 Record 已写入的群消息。自动发送只面向 sta_notify 白名单中的群。
+statistic_time: [23, 50, 00]  # 每日自动发送时间 [时, 分, 秒]，使用本机时区
+name_len_limit: 16  # 报告中群成员名称的最大字符数
+pie_topk: 9         # 发言分布饼图最多单独展示的用户数
+plot_topk: 5        # 消息时段图重点展示的用户数
+plot_interval: 15   # 消息时段图的聚合时间桶大小（分钟）
+sta_word_topk: 8    # /sta_word 词汇统计中展示的高频用户数
+
+# smart/new 使用内置分词、统计权重和可选 LLM 复核；legacy 使用旧版 jieba 词频。
+word_tokenizer:
+  mode: "smart"           # 可选 smart、new（同义）或 legacy
+  statistical_filter: true # 是否按文档频率、用户分散度等计算权重并软过滤
+  # 本地过滤或 LLM 复核后尽量从安全候选中补足的关键词数；候选不足时可能达不到。
+  min_keywords: 30
+  generic_burst:
+    # 仅 smart/new + statistical_filter + 单日统计时生效：平时压低泛用词，
+    # 当它相对本群历史覆盖率显著升高时恢复为内容词。
+    enabled: true
+    lookback_days: 14      # 只读取目标日期之前多少天的消息作为基线
+    min_history_days: 5    # 基线中至少需要多少个有消息的日期
+    min_documents: 5      # 当天至少多少条消息含该词才允许判为突发
+    ratio_threshold: 2.5  # 当天覆盖率至少达到历史中位数的此倍数
+    min_rate_increase: 0.02 # 当天覆盖率相对历史中位数的最小绝对增幅
+    mad_multiplier: 3.0   # 当天覆盖率至少超过“中位数 + 此倍数 × MAD”
+  llm:
+    # 仅复核本地候选，不会把任意新词写入结果；失败时自动回退本地统计。
+    enabled: false  # 开启后每个未命中缓存的统计任务会额外调用一次 LLM
+    model: "ds:deepseek-v4-flash" # provider_code:model_name，须存在于 LLM provider 配置
+    candidate_limit: 80  # 单次最多发送给 LLM 的候选词数，最小按 1 处理
+    contexts_per_word: 1 # 每词上下文数；链接、邮箱和 5 位以上数字会脱敏，0 表示不附带
+    supplemental_ratio: 0.35 # 候选名额中预留给“本地已软过滤词”的比例，限制到 0～1
+    timeout: 30       # LLM 请求超时（秒），最小按 1 处理
+    max_tokens: 1600  # LLM 最大输出 token 数，最小按 256 处理

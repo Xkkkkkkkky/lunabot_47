@@ -157,6 +157,95 @@ async def get_word_statistic(group_id, days, word):
     )
     return await get_image_cq(report)
 
+
+def _is_day_args(args):
+    if not args:
+        return True
+    if len(args) != 1:
+        return False
+    value = args[0]
+    try:
+        if value.count('-') == 2:
+            datetime.strptime(value, "%Y-%m-%d")
+        else:
+            int(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_sum_args(args):
+    try:
+        if len(args) == 1:
+            value = args[0].strip().replace('/', '-')
+            if value.count('-') == 0:
+                int(value)
+            else:
+                datetime.strptime(value, "%Y-%m-%d")
+            return True
+        if len(args) == 2:
+            for value in args:
+                datetime.strptime(value.strip().replace('/', '-'), "%Y-%m-%d")
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
+
+
+def _is_time_args(args):
+    if not args:
+        return True
+    if len(args) != 1:
+        return False
+    try:
+        int(args[0])
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_word_args(args):
+    if len(args) == 1:
+        return True
+    if len(args) != 2:
+        return False
+    try:
+        int(args[1])
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+async def _extract_sta_target_group(ctx, args, valid_args):
+    """从 STA 查询参数末尾提取仅超级管理员可用的目标群号。"""
+    current_group_id = int(ctx.group_id)
+    if not args or not check_superuser(ctx.event):
+        return current_group_id, args
+
+    try:
+        target_group_id = int(args[-1])
+    except (TypeError, ValueError):
+        return current_group_id, args
+    if target_group_id <= 0 or not valid_args(args[:-1]):
+        return current_group_id, args
+
+    # 参数数量已经超出原语法时，末尾数字只能是新增的群号。
+    if not valid_args(args):
+        return target_group_id, args[:-1]
+
+    # `/sta day 群号`、`/sta time 群号` 和 `/sta word 词 群号`
+    # 会与原有的“天数”参数冲突；仅当数字确实是机器人所在群时才按群号解析。
+    if target_group_id == current_group_id:
+        return target_group_id, args[:-1]
+    try:
+        groups = await get_group_list(ctx.bot)
+        if find_by(groups, 'group_id', target_group_id):
+            return target_group_id, args[:-1]
+    except Exception:
+        logger.print_exc('获取群列表失败，保留 STA 原参数语义')
+    return current_group_id, args
+
+
 # ------------------------------------------------ 聊天逻辑 ------------------------------------------------
 
 
@@ -165,8 +254,13 @@ sta = CmdHandler(["/sta day",], logger)
 sta.check_cdrate(cd).check_wblist(gwl).check_group()
 @sta.handle()
 async def _(ctx: HandlerContext):
+    group_id, args = await _extract_sta_target_group(
+        ctx,
+        ctx.get_args().strip().split(),
+        _is_day_args,
+    )
     try:
-        date = ctx.get_args().strip()
+        date = ' '.join(args)
         if date.count('-') == 2:
             datetime.strptime(date, "%Y-%m-%d")
         else:
@@ -175,7 +269,7 @@ async def _(ctx: HandlerContext):
     except:
         logger.info(f'日期格式错误, 使用当前日期')
         date = None
-    res = await get_day_statistic(ctx.group_id, date)
+    res = await get_day_statistic(group_id, date)
     return await ctx.asend_reply_msg(res)
 
 
@@ -185,6 +279,7 @@ sta_sum.check_cdrate(cd).check_wblist(gwl).check_group()
 @sta_sum.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
+    group_id, args = await _extract_sta_target_group(ctx, args, _is_sum_args)
     end_date, start_date = None, None
 
     try:
@@ -212,7 +307,7 @@ async def _(ctx: HandlerContext):
 /sta_sum [天数]
 """.strip())
 
-    res = await get_long_statistic(ctx.group_id, start_date, end_date)
+    res = await get_long_statistic(group_id, start_date, end_date)
     return await ctx.asend_reply_msg(res)
 
 
@@ -222,15 +317,20 @@ sta_time.check_cdrate(cd).check_wblist(gwl).check_group()
 @sta_time.handle()
 async def _(ctx: HandlerContext):
     cqs = extract_cq_code(ctx.get_msg())
+    group_id, args = await _extract_sta_target_group(
+        ctx,
+        ctx.get_args().strip().split(),
+        _is_time_args,
+    )
     user_id = None
     if 'at' in cqs and len(cqs['at']) > 0:
         user_id = cqs['at'][0]['qq']
     try:
-        days = int(ctx.get_args().strip().split()[0])
+        days = int(args[0])
     except:
         logger.info(f'日期格式错误, 使用默认30天')
         days = 30
-    res = await get_date_count_statistic(ctx.group_id, days, user_id)
+    res = await get_date_count_statistic(group_id, days, user_id)
     return await ctx.asend_reply_msg(res)
 
 
@@ -240,6 +340,7 @@ sta_word.check_cdrate(cd).check_wblist(gwl).check_group()
 @sta_word.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
+    group_id, args = await _extract_sta_target_group(ctx, args, _is_word_args)
     assert_and_reply(args, "请输入需要查询的词")
     word = args[0]
     try:
@@ -247,7 +348,7 @@ async def _(ctx: HandlerContext):
     except:
         logger.info(f'日期格式错误, 使用默认30天')
         days = 30
-    res = await get_word_statistic(ctx.group_id, days, word)
+    res = await get_word_statistic(group_id, days, word)
     return await ctx.asend_reply_msg(res)
 
 

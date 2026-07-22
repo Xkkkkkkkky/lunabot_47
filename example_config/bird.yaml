@@ -1,3 +1,82 @@
-folk_name_max: 10                 # 俗名匹配显示的最大数量
-query_topk: 10                    # 模糊查询显示的前k名
-max_edit_distance: 2              # 模糊查询的最大编辑距离
+# Bird 模块同时提供“查鸟”和“图片识鸟”。路径均相对于项目根目录，
+# 字节数均使用十进制/二进制整数直接填写，不支持 MB、KB 等单位后缀。
+query:
+  # 本地别名索引会在成功查到鸟种后自动补充，也可通过 /bird alias 管理。
+  alias:
+    file: "data/bird/aliases.json"  # 以拉丁学名为主键的 JSON 索引文件
+    max_name_length: 100             # 学名、常用名和别名的最大字符数
+
+  # 用户输入先由 LLM 规范为中/英/日名和拉丁学名，再进入 Wiki 查询。
+  parser:
+    system_prompt_path: "config/bird_query_prompt.txt"  # 鸟名解析提示词
+    model_preset: "bird.query"  # llm/model_preset.yaml 中的键，不是模型名
+    max_retries: 2       # LLM 输出无效时的总尝试次数，最小按 1 处理
+    max_candidates: 5    # 模糊结果最多保留的候选数，最小按 1 处理
+    min_confidence: 0.72 # 低于此值的 resolved 结果会降级为 ambiguous，范围 0～1
+
+  wiki:
+    # 按顺序尝试各语言条目；简体中文使用 zh-cn 变体。
+    # code 用于匹配 LLM 名称字段，label 用于报告，api_url 为 MediaWiki API。
+    languages:
+      - code: "zh"
+        label: "中文"
+        api_url: "https://zh.wikipedia.org/w/api.php"
+        variant: "zh-cn"
+      - code: "en"
+        label: "英文"
+        api_url: "https://en.wikipedia.org/w/api.php"
+      - code: "ja"
+        label: "日文"
+        api_url: "https://ja.wikipedia.org/w/api.php"
+    # Wikimedia 要求可识别的 User-Agent；仓库地址作为公开联系方式。
+    user_agent: "LunaBot_47/1.0 (https://github.com/Xkkkkkkkky/lunabot_47)"
+    proxy: ""            # 显式 HTTP(S) 代理；留空后才考虑 use_env_proxy
+    use_env_proxy: true  # proxy 为空时是否读取 HTTP(S)_PROXY/NO_PROXY
+    timeout_seconds: 20  # 每次 Wiki API 请求的总超时
+    request_retries: 3   # 429/指定 5xx 状态的总尝试次数
+    retry_backoff_seconds: 1.0  # 重试基础等待；实际等待最多 8 秒
+    image_width: 1000    # 请求条目缩略图时传给 Wikipedia 的目标宽度
+    search_limit: 3      # 精确标题失败后，每个搜索词最多取的候选页数
+    # 与章节标题大小写无关地匹配；命中后跳过该章节正文。
+    skip_sections: ["参考资料", "参考文献", "外部链接", "参见", "注释"]
+    min_content_chars: 80       # 正文总字符数低于此值时放弃该条目
+    image_timeout_seconds: 15   # 下载条目首图的总超时
+    image_max_bytes: 10485760   # 条目首图允许下载的最大字节数
+
+  cache:
+    enabled: true  # 是否缓存已绘制的查鸟报告
+    directory: "data/bird/query_cache"  # 留空也会禁用缓存
+    version: 1     # 修改版式后递增，以主动失效旧缓存
+    jpeg_quality: 88  # 缓存 JPEG 质量；运行时会限制到 50～95
+
+  render:
+    width: 1000            # 报告宽度，运行时最低为 720 px
+    cover_size: 290        # 首图边长，运行时限制为 220～300 px
+    max_facts: 8           # 从 infobox 提取的键值信息上限；0 表示不提取
+    max_sections: 6        # 概述加正文分节的最大总数，最小按 1 处理
+    section_max_chars: 900 # 每个章节最多保留的字符数，最小按 120 处理
+    total_max_chars: 4800  # 整份正文最多保留的字符数
+
+recognition:
+  provider: "web"  # 识别后端注册名；当前内置后端为 web
+  cooldown:
+    group_seconds: 10  # 同群共享冷却，保护第三方识别站
+    user_seconds: 10   # 同一用户跨群共享冷却
+  image:
+    max_bytes: 4096000  # 压缩后 JPEG 的最大字节数；网页端限制为 4 MB
+    max_edge: 2400      # 上传前等比缩放后的最长边上限（像素）
+    max_pixels: 40000000 # 解码输入图的总像素安全上限，防止超大图片耗尽内存
+  web:
+    # 端点来自 whatbird.cn 当前网页脚本：先 /upload，再向 /bird 提交 image_id。
+    base_url: "https://whatbird.cn/" # 网页服务根地址
+    upload_path: "/upload"           # 图片上传路径，返回 imageId
+    classify_path: "/bird"           # 使用 image_id 分类的路径
+    image_path_prefix: "/avatar"     # 结果中相对代表图路径的前缀
+    source_name: "知鸟网"             # 报告中展示的来源名称
+    timeout_seconds: 30               # 上传和分类各自的请求总超时
+  render:
+    width: 1000                  # 报告宽度，运行时最低为 720 px
+    top_k: 5                     # 报告最多展示的候选鸟种数
+    description_max_chars: 700   # 首选候选简介的最大字符数，最小按 120 处理
+    image_timeout_seconds: 15    # 下载候选代表图的总超时
+    representative_image_max_bytes: 8388608  # 代表图最大下载字节数

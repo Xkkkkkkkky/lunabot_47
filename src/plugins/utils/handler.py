@@ -2537,12 +2537,13 @@ DEFAULT_CONFIRM_ACTIONS_TIMEOUT_CFG = global_config.item('confirm_actions_timeou
 
 @dataclass
 class NeedConfirmAction:
-    """待确认操作及其可选的消息引用、参数校验约束。"""
+    """待确认或已执行可撤销操作及其消息约束。"""
 
     expire_time: datetime
-    action: Callable[[HandlerContext], Any]
+    action: Callable[[HandlerContext], Any] | None
+    cancel_action: Callable[[HandlerContext], Any] | None = None
+    expire_action: Callable[[], Any] | None = None
     prompt_message_id: int | None = None
-    require_reply: bool = False
     allow_cancel_command: bool = True
     confirmation_validator: Callable[[HandlerContext], Any] | None = None
 
@@ -2555,20 +2556,17 @@ async def add_need_confirm_action(
     additional_msg: str = None, 
     timeout: timedelta = None,
     fold_msg: bool = True,
-    require_reply: bool = False,
     allow_cancel_command: bool = True,
     confirmation_validator: Callable[[HandlerContext], Any] | None = None,
 ):
     key = (ctx.user_id, ctx.group_id or None)
     if timeout is None:
         timeout = timedelta(seconds=DEFAULT_CONFIRM_ACTIONS_TIMEOUT_CFG.get())
-    if require_reply:
-        msg = (
-            f'请在{get_readable_timedelta(timeout)}内回复本消息并发送"/确认"以执行操作，'
-            '超时未确认将自动取消'
-        )
+    msg = f'请在{get_readable_timedelta(timeout)}内回复"/确认"'
+    if allow_cancel_command:
+        msg += '执行，回复"/取消"取消；超时自动取消'
     else:
-        msg = f'请发送"/确认"或"/取消"以继续操作'
+        msg += '执行，超时自动取消'
     if additional_msg:
         msg = f'{additional_msg}\n' + msg
     if fold_msg:
@@ -2579,15 +2577,59 @@ async def add_need_confirm_action(
     prompt_message_id = None
     if isinstance(ret, dict) and ret.get('message_id') is not None:
         prompt_message_id = int(ret['message_id'])
-    if require_reply and prompt_message_id is None:
+    if prompt_message_id is None:
         raise ReplyException('无法获取待确认消息 ID，本次操作已自动取消')
+    previous = _need_confirm_actions.get(key)
+    if previous is not None and previous.expire_action is not None:
+        await call_common_or_async(previous.expire_action)
     _need_confirm_actions[key] = NeedConfirmAction(
         expire_time=datetime.now() + timeout,
         action=action,
         prompt_message_id=prompt_message_id,
-        require_reply=require_reply,
         allow_cancel_command=allow_cancel_command,
         confirmation_validator=confirmation_validator,
+    )
+
+
+async def add_cancellable_action(
+    ctx: HandlerContext,
+    cancel_action: Callable[[HandlerContext], Any],
+    additional_msg: str = None,
+    timeout: timedelta = None,
+    fold_msg: bool = True,
+    expire_action: Callable[[], Any] | None = None,
+):
+    """登记一个已经执行、在超时前可由 ``/取消`` 撤销的操作。"""
+    key = (ctx.user_id, ctx.group_id or None)
+    if timeout is None:
+        timeout = timedelta(seconds=DEFAULT_CONFIRM_ACTIONS_TIMEOUT_CFG.get())
+    if not additional_msg:
+        if expire_action is not None:
+            await call_common_or_async(expire_action)
+        raise ReplyException('缺少可取消操作提示，本次操作无法取消')
+    msg = additional_msg
+    if fold_msg:
+        ret = await ctx.asend_fold_msg_adaptive(msg, need_reply=True)
+    else:
+        ret = await ctx.asend_reply_msg(msg)
+
+    prompt_message_id = None
+    if isinstance(ret, dict) and ret.get('message_id') is not None:
+        prompt_message_id = int(ret['message_id'])
+    if prompt_message_id is None:
+        if expire_action is not None:
+            await call_common_or_async(expire_action)
+        raise ReplyException('无法获取可取消提示消息 ID，本次操作无法取消')
+
+    previous = _need_confirm_actions.get(key)
+    if previous is not None and previous.expire_action is not None:
+        await call_common_or_async(previous.expire_action)
+    _need_confirm_actions[key] = NeedConfirmAction(
+        expire_time=datetime.now() + timeout,
+        action=None,
+        cancel_action=cancel_action,
+        expire_action=expire_action,
+        prompt_message_id=prompt_message_id,
     )
 
 @repeat_with_interval(10, "清空过期确认操作", utils_logger)
@@ -2596,6 +2638,11 @@ async def _clean_expired_confirm_actions():
     for key, pending in list(_need_confirm_actions.items()):
         if now >= pending.expire_time:
             del _need_confirm_actions[key]
+            if pending.expire_action is not None:
+                try:
+                    await call_common_or_async(pending.expire_action)
+                except Exception:
+                    utils_logger.print_exc('清理过期可取消操作失败')
 
 
 # ============================ 订阅管理 ============================ #
@@ -2898,12 +2945,20 @@ _handler.check_cdrate(cd)
 async def _(ctx: HandlerContext):
     key = (ctx.user_id, ctx.group_id or None)
     pending = _need_confirm_actions.get(key)
+    if pending is not None and datetime.now() >= pending.expire_time:
+        del _need_confirm_actions[key]
+        if pending.expire_action is not None:
+            await call_common_or_async(pending.expire_action)
+        pending = None
     assert_and_reply(pending, "当前没有需要确认的操作")
-    if pending.require_reply:
-        assert_and_reply(
-            ctx.get_reply_msg_id() == pending.prompt_message_id,
-            '请引用待确认消息并发送"/确认"',
-        )
+    assert_and_reply(
+        pending.action is not None,
+        '当前操作已经执行，如需撤销请发送"/取消"',
+    )
+    assert_and_reply(
+        ctx.get_reply_msg_id() == pending.prompt_message_id,
+        '请由原操作发起者引用待处理消息并发送"/确认"',
+    )
     if pending.confirmation_validator is not None:
         # 先校验确认参数，校验失败时保留待确认操作，允许用户重试。
         await call_common_or_async(pending.confirmation_validator, ctx)
@@ -2917,11 +2972,23 @@ _handler.check_cdrate(cd)
 async def _(ctx: HandlerContext):
     key = (ctx.user_id, ctx.group_id or None)
     pending = _need_confirm_actions.get(key)
+    if pending is not None and datetime.now() >= pending.expire_time:
+        del _need_confirm_actions[key]
+        if pending.expire_action is not None:
+            await call_common_or_async(pending.expire_action)
+        pending = None
     assert_and_reply(pending, "当前没有需要取消的操作")
+    assert_and_reply(
+        ctx.get_reply_msg_id() == pending.prompt_message_id,
+        '请由原操作发起者引用待处理消息并发送"/取消"',
+    )
     if not pending.allow_cancel_command:
         return
     del _need_confirm_actions[key]
-    await ctx.asend_reply_msg("已取消最近的操作")
+    if pending.cancel_action is not None:
+        await call_common_or_async(pending.cancel_action, ctx)
+    else:
+        await ctx.asend_reply_msg("已取消最近的操作")
 
 # 清除退出群聊的订阅数据
 _handler = CmdHandler(['/clean group', '/清理退群'], utils_logger)

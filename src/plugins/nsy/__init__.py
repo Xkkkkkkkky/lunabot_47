@@ -132,8 +132,8 @@ class SimilarUploadRejection:
 
 
 @dataclass
-class SimilarUploadLinkConfirmation:
-    """跨图库 pHash 命中后等待用户确认的硬链接加图项。"""
+class SimilarUploadLink:
+    """跨图库 pHash 命中后已自动创建的硬链接加图项。"""
 
     upload_index: int
     gallery: str
@@ -142,6 +142,7 @@ class SimilarUploadLinkConfirmation:
     image_hash: str
     phash: str
     link_root_pid: int
+    linked_pid: int
     similar_images: list[tuple[NsyImage, int]] = field(default_factory=list)
 
 
@@ -152,8 +153,16 @@ class GalleryUploadResult:
     added: list[NsyImage] = field(default_factory=list)
     repeats: list[tuple[int, NsyImage]] = field(default_factory=list)
     similar_rejections: list[SimilarUploadRejection] = field(default_factory=list)
-    pending_links: list[SimilarUploadLinkConfirmation] = field(default_factory=list)
+    phash_links: list[SimilarUploadLink] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class GalleryUploadTarget:
+    """用户输入的单个加图目标及其图库索引结果。"""
+    token: str
+    gallery: str | None = None
+    error: str = ''
 
 
 @dataclass(frozen=True)
@@ -268,13 +277,12 @@ def _format_upload_result(
     added: list['NsyImage'],
     repeats: list[tuple[int, 'NsyImage']],
     similar_rejections: list[SimilarUploadRejection],
-    pending_links: list[SimilarUploadLinkConfirmation],
+    phash_links: list[SimilarUploadLink],
     errors: list[str],
     images_by_pid: dict[int, NsyImage],
 ) -> str:
     lines = [
-        f'图库"{gallery}": 添加{len(added)}张，'
-        f'链接{len(pending_links)}张，共{total}张'
+        f'图库"{gallery}": 添加{len(added)}张，共{total}张'
     ]
     if added:
         lines.append('pid: ' + ' '.join(str(image.pid) for image in added))
@@ -288,7 +296,7 @@ def _format_upload_result(
                 })
                 gallery_names = '、'.join(f'"{name}"' for name in existing_galleries)
                 lines.append(
-                    f'图片已存在于 {gallery_names}，链接"{image.gallery}"（根 pid={image.linked_to_pid}）'
+                    f'已存在于 {gallery_names}，链接"{image.gallery}"（根 pid={image.linked_to_pid}）'
                 )
     if repeats:
         lines.extend(
@@ -296,21 +304,9 @@ def _format_upload_result(
             for idx, duplicated in repeats
         )
     if similar_rejections:
-        lines.append(f'相似图片拒绝添加: {len(similar_rejections)}张')
-        lines.extend(
-            f'第{rejection.upload_index}张与 '
-            + '、'.join(
-                f'pid={image.pid}（图库“{image.gallery}”，Hamming distance {distance}）'
-                for image, distance in rejection.similar_images
-            )
-            for rejection in similar_rejections
-        )
-    if pending_links:
-        lines.append(f'相似图链接待确认: {len(pending_links)}张')
-        lines.extend(
-            f'第{pending.upload_index}张将链接到 pid={pending.link_root_pid}'
-            for pending in pending_links
-        )
+        lines.append(f'相似图: {len(similar_rejections)}张，已拒绝添加')
+    if phash_links:
+        lines.append(f'跨图库相似图: {len(phash_links)}张，已链接')
     if errors:
         lines.append('失败:')
         lines.extend(errors)
@@ -347,10 +343,10 @@ def _read_random_weight(value, default: float = 1.0, desc: str = '随机权重')
     try:
         weight = float(value)
     except Exception:
-        logger.warning(f'NSY {desc}配置无效: {value!r}，使用默认值 {default:g}')
+        logger.warning(f'{desc}配置无效: {value!r}，使用默认值 {default:g}')
         return default
     if weight != weight or weight == float('inf') or weight < 0:
-        logger.warning(f'NSY {desc}配置无效: {value!r}，使用默认值 {default:g}')
+        logger.warning(f'{desc}配置无效: {value!r}，使用默认值 {default:g}')
         return default
     return weight
 
@@ -367,7 +363,7 @@ def _get_random_weight_config() -> tuple[dict[str, float], float]:
     if raw_format_weights is None:
         raw_format_weights = {}
     if not isinstance(raw_format_weights, dict):
-        logger.warning('NSY random_weights.formats 不是对象，使用默认格式权重')
+        logger.warning('random_weights.formats 不是对象，使用默认格式权重')
         raw_format_weights = {}
     for fmt, weight in raw_format_weights.items():
         format_weights[str(fmt).upper()] = _read_random_weight(
@@ -412,7 +408,7 @@ def _get_phash_distance_threshold() -> int:
     except Exception:
         threshold = 4
     if not 1 <= threshold <= 64:
-        logger.warning(f'NSY pHash Hamming distance 阈值配置无效: {value!r}，使用默认值 4')
+        logger.warning(f'pHash Hamming distance 阈值配置无效: {value!r}，使用默认值 4')
         return 4
     return threshold
 
@@ -518,11 +514,11 @@ class NsyManager:
                     self.gallery_by_alias[alias] = gallery
                     self.aliases_by_gallery.setdefault(gallery, []).append(alias)
             except Exception as e:
-                logger.warning(f'加载 NSY 别名索引 gallery={gallery} 失败: {get_exc_desc(e)}')
+                logger.warning(f'加载别名索引 gallery={gallery} 失败: {get_exc_desc(e)}')
 
         self.pid_top = max(self.images_by_pid, default=0)
         logger.info(
-            f'成功加载 NSY 图库索引: {len(self.aliases_by_gallery)}个图库, '
+            f'成功加载图库索引: {len(self.aliases_by_gallery)}个图库, '
             f'{len(self.images_by_pid)}张图片, {len(self.gallery_by_alias)}个别名, '
             f'pid_top={self.pid_top}'
         )
@@ -983,17 +979,17 @@ class NsyManager:
                     action = '保留根文件'
                 elif image.identity in retained:
                     action = (
-                        '保留跨图库索引 · 硬链接'
+                        '保留索引 · 链接'
                         if image.pid in relink_pid_set else
-                        '保留跨图库索引 · 已是硬链接'
+                        '保留索引 · 已是链接'
                     )
                 else:
                     action = '归并链接后删除图片'
                 annotated_images.append(replace(image, action=action))
             action_order = {
                 '保留根文件': 0,
-                '保留跨图库索引 · 硬链接': 1,
-                '保留跨图库索引 · 已是硬链接': 1,
+                '保留索引 · 链接': 1,
+                '保留索引 · 已是链接': 1,
                 '归并链接后删除图片': 2,
             }
             annotated_images.sort(key=lambda image: (
@@ -1050,7 +1046,7 @@ class NsyManager:
         for image in images_by_pid.values():
             path = self._image_path(image)
             if not osp.exists(path):
-                raise ReplyException(f'硬链接校验失败: pid={image.pid} 文件不存在')
+                raise ReplyException(f'链接校验失败: pid={image.pid} 文件不存在')
             stat = os.stat(path)
             components.setdefault((stat.st_dev, stat.st_ino), []).append(image)
 
@@ -1061,12 +1057,12 @@ class NsyManager:
                 image = members[0]
                 if len(roots) != 1 or image.linked_pids:
                     raise ReplyException(
-                        f'硬链接校验失败: 单文件 pid={image.pid} 携带链接关系'
+                        f'链接校验失败: 单文件 pid={image.pid} 携带链接关系'
                     )
                 continue
             if len(roots) != 1:
                 raise ReplyException(
-                    '硬链接校验失败: inode 组根数量不是 1，'
+                    '链接校验失败: inode 组根数量不是 1，'
                     f'pids={[image.pid for image in members]}'
                 )
             root = roots[0]
@@ -1074,12 +1070,12 @@ class NsyManager:
             expected_child_pids = [image.pid for image in children]
             if root.linked_pids != expected_child_pids:
                 raise ReplyException(
-                    f'硬链接校验失败: 根 pid={root.pid} 的反向索引不完整'
+                    f'链接校验失败: 根 pid={root.pid} 的反向索引不完整'
                 )
             for child in children:
                 if child.linked_to_pid != root.pid or child.linked_pids:
                     raise ReplyException(
-                        f'硬链接校验失败: 子 pid={child.pid} 未直接指向根 pid={root.pid}'
+                        f'链接校验失败: 子 pid={child.pid} 未直接指向根 pid={root.pid}'
                     )
 
     def add_image_from_file(
@@ -1099,7 +1095,7 @@ class NsyManager:
 
         其他图库已有相同 SHA-256 时创建硬链接；上层也可通过
         ``preferred_link_root`` 指定跨图库 pHash 相似图片的硬链接根。
-        指定根时表示上层已完成报告和确认，本方法只校验根有效性
+        指定根时表示上层已完成 pHash 比较并选定根，本方法只校验根有效性
         并执行硬链接，不再扫描全图库。
         ``prechecked_hash_matches`` 可传入上层已完成的全库 SHA-256
         比对快照，避免落盘时再扫描一次全图库。
@@ -1110,15 +1106,15 @@ class NsyManager:
         gallery = self.resolve_gallery(name_or_alias, raise_if_missing=True)
         info = info or _inspect_image_file(src_path)
         image_hash = image_hash or _sha256_file(src_path)
-        image_phash = normalize_phash(image_phash) or compute_phash(src_path)
+        image_phash = normalize_phash(image_phash)
         link_root = None
         if preferred_link_root is not None:
             preferred_link_root = self.images_by_pid.get(preferred_link_root.pid)
             if preferred_link_root is None:
-                raise ReplyException('pHash 硬链接根索引已失效')
+                raise ReplyException('pHash 链接根索引已失效')
             link_root = self._get_link_root(preferred_link_root)
             if link_root is None or not osp.exists(self._image_path(link_root)):
-                raise ReplyException('pHash 硬链接根文件已失效')
+                raise ReplyException('pHash 链接根文件已失效')
         else:
             match_candidates = (
                 self.find_images_by_hash(image_hash)
@@ -1145,6 +1141,11 @@ class NsyManager:
                     link_root = root
                     break
 
+        # 精确 hash 或上层 pHash 已选定链接根时，索引特征直接继承根文件；
+        # 只有确实需要保存上传原图时才计算其 pHash。
+        if link_root is None and image_phash is None:
+            image_phash = compute_phash(src_path)
+
         pid = self._allocate_pid()
         ext = self._dedup_root_extension(link_root) if link_root else info.ext
         filename = f'{pid}{ext}'
@@ -1155,7 +1156,7 @@ class NsyManager:
             try:
                 os.link(self._image_path(link_root), dst_path)
             except OSError as e:
-                raise ReplyException(f'创建跨图库硬链接失败: {get_exc_desc(e)}')
+                raise ReplyException(f'创建链接失败: {get_exc_desc(e)}')
 
         image = NsyImage(
             pid=pid,
@@ -1204,7 +1205,7 @@ class NsyManager:
         ]
         total_weight = sum(weights)
         if total_weight != total_weight or total_weight == float('inf') or total_weight <= 0:
-            logger.warning(f'NSY 图库"{gallery}"随机权重总和无效，回退等概率随机')
+            logger.warning(f'图库"{gallery}"随机权重总和无效，回退等概率随机')
             return random.choice(images)
         return random.choices(images, weights=weights, k=1)[0]
 
@@ -1212,7 +1213,7 @@ class NsyManager:
         """读取某图库最近发送过的不同图片哈希，按新到旧返回。"""
         history_by_gallery = file_db.get(RANDOM_HISTORY_DB_KEY, {})
         if not isinstance(history_by_gallery, dict):
-            logger.warning('NSY 随机图片历史格式无效，本次忽略近期降权')
+            logger.warning('随机图片历史格式无效，本次忽略近期降权')
             return []
         raw_history = history_by_gallery.get(gallery, [])
         if not isinstance(raw_history, list):
@@ -1395,20 +1396,20 @@ class NsyManager:
                     if osp.exists(path):
                         os.remove(path)
                 except Exception as e:
-                    logger.warning(f'NSY 去重回滚删除硬链接失败: {get_exc_desc(e)}')
+                    logger.warning(f'去重回滚删除硬链接失败: {get_exc_desc(e)}')
             for _, original_path, temp_path in reversed(staged):
                 try:
                     if osp.exists(temp_path):
                         os.rename(temp_path, original_path)
                 except Exception as e:
-                    logger.warning(f'NSY 去重回滚恢复文件失败: {get_exc_desc(e)}')
+                    logger.warning(f'去重回滚恢复文件失败: {get_exc_desc(e)}')
             for pid, snapshot in snapshots.items():
                 self.images_by_pid[pid] = snapshot
                 self.images_by_gallery.setdefault(snapshot.gallery, {})[pid] = snapshot
             try:
                 self._save_index()
             except Exception as e:
-                logger.warning(f'NSY 去重回滚恢复索引失败: {get_exc_desc(e)}')
+                logger.warning(f'去重回滚恢复索引失败: {get_exc_desc(e)}')
 
         try:
             for pid in staged_pids:
@@ -1463,7 +1464,7 @@ class NsyManager:
                 if osp.exists(temp_path):
                     os.remove(temp_path)
             except Exception as e:
-                logger.warning(f'NSY 去重删除临时备份失败: {get_exc_desc(e)}')
+                logger.warning(f'去重删除临时备份失败: {get_exc_desc(e)}')
 
         removed = [snapshots[pid] for pid in delete_pids]
         relinked = [self.images_by_pid[pid] for pid in relink_pids]
@@ -1659,45 +1660,38 @@ async def _batch_add_images(
     """
     每张新图只下载并计算一次特征，再与全图库现有索引比较。
 
+    同图库 pHash 命中时拒绝；仅跨图库命中时立即创建硬链接。
     加图不刷新现有图片特征；强制模式仅跳过 pHash 相似检查。
     """
     results = [GalleryUploadResult(gallery=gallery) for gallery in galleries]
-    # 确认阶段不重新比对图库，因此需在首次全库比对时
-    # 排除同一批次中“同图库 + 同硬链接根”的重复计划。
-    pending_by_link_target: dict[
-        tuple[str, int], SimilarUploadLinkConfirmation
-    ] = {}
+    # 同一批次中，同一图库只保留一个指向相同根的 pHash 链接。
+    phash_link_by_target: dict[tuple[str, int], SimilarUploadLink] = {}
     for idx, image_data in enumerate(image_datas, 1):
         processed_results: set[int] = set()
         report_items_for_image: list[
-            SimilarUploadRejection | SimilarUploadLinkConfirmation
+            SimilarUploadRejection | SimilarUploadLink
         ] = []
         try:
             temp = _get_image_temp_file(ctx, image_data)
             async with temp as path:
                 info = _inspect_image_file(path)
                 image_hash = _sha256_file(path)
-                image_phash = await run_in_pool(compute_phash, path)
-                # 在任何目标图库落盘前完成该新图的一次全库比对；
-                # 后续目标只复用结果，不重新扫描全图库。
+                # 先完成全图库 SHA-256 查询；只在精确 hash 零命中时
+                # 才计算并检查 pHash，后续目标均复用本次查询结果。
                 hash_matches = [
                     image
                     for image in manager.find_images_by_hash(image_hash)
                     if osp.exists(manager.get_image_path(image))
                 ]
+                image_phash = None
                 similar_images = []
-                if check_phash:
-                    global_matches = await run_in_pool(
-                        manager.find_global_similar_images,
-                        image_phash,
-                    )
-                    # 完全相同文件仍交由 SHA-256 规则处理：同图库拒绝，
-                    # 跨图库创建硬链接；pHash 只继续处理不同字节的相似图片。
-                    similar_images = [
-                        (image, distance)
-                        for image, distance in global_matches
-                        if image.hash != image_hash
-                    ]
+                if not hash_matches:
+                    image_phash = await run_in_pool(compute_phash, path)
+                    if check_phash:
+                        similar_images = await run_in_pool(
+                            manager.find_global_similar_images,
+                            image_phash,
+                        )
                 for result_idx, result in enumerate(results):
                     try:
                         duplicated = next((
@@ -1727,42 +1721,39 @@ async def _batch_add_images(
                             report_items_for_image.append(rejection)
                             continue
 
-                        exact_link_root = None
-                        for matched in hash_matches:
-                            root = manager._get_link_root(matched)
-                            if root is not None and osp.exists(manager.get_image_path(root)):
-                                exact_link_root = root
-                                break
-                        if exact_link_root is not None:
-                            pending = pending_by_link_target.get((
-                                result.gallery,
-                                exact_link_root.pid,
-                            ))
-                            if pending is not None:
-                                result.errors.append(
-                                    f'第{idx}张: 与本批第{pending.upload_index}张'
-                                    '会创建相同硬链接，已跳过'
-                                )
-                                continue
-
-                        # SHA-256 精确命中优先使用原硬链接规则；只有字节
-                        # 不同且仅在其他图库命中 pHash 时，才指定 pHash 根文件。
+                        # SHA-256 全局零命中且仅在其他图库命中 pHash 时，
+                        # 才指定 pHash 根文件。
                         phash_link_root = None
-                        if check_phash and similar_images and not hash_matches:
+                        if check_phash and similar_images:
                             phash_link_root = manager.select_best_phash_link_root(
                                 similar_images,
                             )
 
                         if phash_link_root is not None:
                             link_target = (result.gallery, phash_link_root.pid)
-                            previous_pending = pending_by_link_target.get(link_target)
-                            if previous_pending is not None:
+                            previous_link = phash_link_by_target.get(link_target)
+                            if previous_link is not None:
                                 result.errors.append(
-                                    f'第{idx}张: 与本批第{previous_pending.upload_index}张'
+                                    f'第{idx}张: 与本批第{previous_link.upload_index}张'
                                     '会创建相同硬链接，已跳过'
                                 )
                                 continue
-                            pending = SimilarUploadLinkConfirmation(
+                            image, duplicated = manager.add_image_from_file(
+                                result.gallery,
+                                path,
+                                uploader_id=ctx.user_id,
+                                group_id=ctx.group_id or 0,
+                                info=info,
+                                image_hash=image_hash,
+                                image_phash=image_phash,
+                                preferred_link_root=phash_link_root,
+                            )
+                            if duplicated is not None:
+                                result.repeats.append((idx, duplicated))
+                                continue
+                            if image is None:
+                                raise ReplyException('创建链接失败')
+                            link = SimilarUploadLink(
                                 upload_index=idx,
                                 gallery=result.gallery,
                                 staged_path='',
@@ -1770,11 +1761,13 @@ async def _batch_add_images(
                                 image_hash=image_hash,
                                 phash=image_phash,
                                 link_root_pid=phash_link_root.pid,
+                                linked_pid=image.pid,
                                 similar_images=list(similar_images),
                             )
-                            pending_by_link_target[link_target] = pending
-                            result.pending_links.append(pending)
-                            report_items_for_image.append(pending)
+                            phash_link_by_target[link_target] = link
+                            result.added.append(image)
+                            result.phash_links.append(link)
+                            report_items_for_image.append(link)
                             continue
 
                         image, duplicated = manager.add_image_from_file(
@@ -1797,7 +1790,7 @@ async def _batch_add_images(
                     except ReplyException as e:
                         result.errors.append(f'第{idx}张: {get_exc_desc(e)}')
                     except Exception as e:
-                        logger.print_exc(f'添加第{idx}张图片到 NSY 图库"{result.gallery}"失败')
+                        logger.print_exc(f'添加第{idx}张图片到图库"{result.gallery}"失败')
                         result.errors.append(f'第{idx}张: {get_exc_desc(e)}')
                     finally:
                         processed_results.add(result_idx)
@@ -1815,7 +1808,7 @@ async def _batch_add_images(
                 if result_idx not in processed_results:
                     result.errors.append(f'第{idx}张: {get_exc_desc(e)}')
         except Exception as e:
-            logger.print_exc(f'下载或校验第{idx}张 NSY 图片失败')
+            logger.print_exc(f'下载或校验第{idx}张图片失败')
             for result_idx, result in enumerate(results):
                 if result_idx not in processed_results:
                     result.errors.append(f'第{idx}张: {get_exc_desc(e)}')
@@ -1823,10 +1816,10 @@ async def _batch_add_images(
 
 
 def _upload_similarity_feature(
-    item: SimilarUploadRejection | SimilarUploadLinkConfirmation,
+    item: SimilarUploadRejection | SimilarUploadLink,
 ) -> ImageFeature:
-    """把 pHash 拒绝/待确认项转换为对比报告的距离基准。"""
-    is_pending_link = isinstance(item, SimilarUploadLinkConfirmation)
+    """把 pHash 拒绝/自动链接项转换为对比报告的距离基准。"""
+    is_phash_link = isinstance(item, SimilarUploadLink)
     return ImageFeature(
         identity=f'upload:{type(item).__name__}:{item.gallery}:{item.upload_index}',
         gallery=item.gallery,
@@ -1836,8 +1829,8 @@ def _upload_similarity_feature(
         height=item.info.height,
         pending=True,
         action=(
-            '待确认 · 创建链接'
-            if is_pending_link else '待上传 · 存在相似图'
+            f'已链接 · pid={item.linked_pid}'
+            if is_phash_link else '已拒绝添加'
         ),
     )
 
@@ -1845,11 +1838,11 @@ def _upload_similarity_feature(
 def _build_upload_similarity_groups(
     manager: NsyManager,
     rejections: list[SimilarUploadRejection],
-    pending_links: list[SimilarUploadLinkConfirmation],
+    phash_links: list[SimilarUploadLink],
 ) -> list[SimilarityGroup]:
-    """为拒绝/待确认项构建“待上传图 + 已有相似图”对比组。"""
+    """为拒绝/自动链接项构建“待上传图 + 已有相似图”对比组。"""
     groups = []
-    for item in [*rejections, *pending_links]:
+    for item in [*rejections, *phash_links]:
         candidate = _upload_similarity_feature(item)
         features = [candidate]
         features.extend(
@@ -1861,6 +1854,24 @@ def _build_upload_similarity_groups(
         if len(features) >= 2:
             groups.append(SimilarityGroup(tuple(features), candidate))
     return groups
+
+
+def _cancel_phash_link(
+    manager: NsyManager,
+    link: SimilarUploadLink,
+) -> NsyImage:
+    """删除一项仍保持原关系的跨图库 pHash 子链接。"""
+    image = manager.find_image(link.linked_pid)
+    if image is None:
+        raise ReplyException(f'pid={link.linked_pid} 已不存在')
+    if (
+        image.gallery != link.gallery
+        or image.linked_to_pid != link.link_root_pid
+        or image.linked_pids
+    ):
+        raise ReplyException(f'pid={link.linked_pid} 的链接关系已变化')
+    requested, _ = manager.delete_image(link.linked_pid)
+    return requested
 
 
 def _parse_one_arg(ctx: HandlerContext, usage: str) -> str:
@@ -1924,9 +1935,30 @@ def _batch_create_galleries(
         except ReplyException as e:
             results.append((name, False, get_exc_desc(e)))
         except Exception as e:
-            logger.print_exc(f'创建 NSY 图库"{name}"失败')
+            logger.print_exc(f'创建图库"{name}"失败')
             results.append((name, False, get_exc_desc(e)))
     return results
+
+
+def _resolve_gallery_upload_targets(
+    manager: NsyManager,
+    gallery_tokens: list[str],
+) -> list[GalleryUploadTarget]:
+    """逐项索引加图目标；单项失败不阻断其他有效图库。"""
+    targets = []
+    seen_galleries = set()
+    for token in gallery_tokens:
+        try:
+            gallery = manager.resolve_gallery(token, raise_if_missing=True)
+            if gallery in seen_galleries:
+                raise ReplyException(f'图库"{gallery}"重复输入')
+            seen_galleries.add(gallery)
+            targets.append(GalleryUploadTarget(token=token, gallery=gallery))
+        except ReplyException as e:
+            targets.append(
+                GalleryUploadTarget(token=token, error=get_exc_desc(e))
+            )
+    return targets
 
 
 def _nsy_cmd(
@@ -1955,25 +1987,43 @@ async def _handle_nsy_add(ctx: HandlerContext, force: bool = False):
     command = '/强制加图' if force else '/加图'
     gallery_tokens = _parse_many_args(ctx, f'{command} 图库名称/别名... [图片]')
     manager = NsyManager.get()
-    galleries: list[str] = []
-    for token in gallery_tokens:
-        gallery = manager.resolve_gallery(token, raise_if_missing=True)
-        if gallery in galleries:
-            raise ReplyException(f'图库"{gallery}"重复输入')
-        galleries.append(gallery)
+    targets = _resolve_gallery_upload_targets(manager, gallery_tokens)
+    galleries = [target.gallery for target in targets if target.gallery is not None]
+    for gallery in galleries:
         await ctx.block(f'nsy:add:{gallery}')
 
-    image_datas = await ctx.aget_image_datas(max_count=int(config.get('max_upload_images', 20)))
-    results = await _batch_add_images(
-        ctx,
-        manager,
-        galleries,
-        image_datas,
-        check_phash=not force,
-    )
+    image_datas = []
+    results = []
+    if galleries:
+        image_datas = await ctx.aget_image_datas(
+            max_count=int(config.get('max_upload_images', 20)),
+        )
+        results = await _batch_add_images(
+            ctx,
+            manager,
+            galleries,
+            image_datas,
+            check_phash=not force,
+        )
+    result_by_gallery = {result.gallery: result for result in results}
 
     sections = []
-    for result in results:
+    for target in targets:
+        if target.gallery is None:
+            _append_operation_log(
+                ctx.event,
+                (
+                    f'{"强制加图" if force else "加图"} '
+                    f'gallery_token="{target.token}" status=failed '
+                    f'error="{target.error}"'
+                ),
+            )
+            sections.append(
+                f'图库"{target.token}": 索引失败\n{target.error}'
+            )
+            continue
+
+        result = result_by_gallery[target.gallery]
         _append_operation_log(
             ctx.event,
             (
@@ -1981,7 +2031,7 @@ async def _handle_nsy_add(ctx: HandlerContext, force: bool = False):
                 f'added={[image.pid for image in result.added]} '
                 f'repeated={[dup.pid for _, dup in result.repeats]} '
                 f'phash_rejected={len(result.similar_rejections)} '
-                f'phash_link_pending={len(result.pending_links)} '
+                f'phash_linked={[link.linked_pid for link in result.phash_links]} '
                 f'failed={len(result.errors)}'
             ),
         )
@@ -1991,7 +2041,7 @@ async def _handle_nsy_add(ctx: HandlerContext, force: bool = False):
             result.added,
             result.repeats,
             result.similar_rejections,
-            result.pending_links,
+            result.phash_links,
             result.errors,
             manager.images_by_pid,
         ))
@@ -2001,114 +2051,87 @@ async def _handle_nsy_add(ctx: HandlerContext, force: bool = False):
         for result in results
         for rejection in result.similar_rejections
     ]
-    pending_links = [
-        pending
+    phash_links = [
+        link
         for result in results
-        for pending in result.pending_links
+        for link in result.phash_links
     ]
-    if not rejections and not pending_links:
+    if not rejections and not phash_links:
         return await ctx.asend_fold_msg_adaptive(msg)
 
-    report_items = [*rejections, *pending_links]
+    report_items = [*rejections, *phash_links]
     staged_paths = {item.staged_path for item in report_items}
     try:
         groups = _build_upload_similarity_groups(
             manager,
             rejections,
-            pending_links,
+            phash_links,
         )
         report_pages = await render_similarity_report(
             groups,
-            'NSY 加图 pHash 相似检查',
+            '加图相似检查',
             show_decisions=False,
         )
         for page in report_pages:
             msg += '\n' + await get_image_cq(page, low_quality=True)
+    except Exception as e:
+        logger.print_exc('生成加图检查报告失败')
+        msg += f'\n相似图对比报告生成失败: {get_exc_desc(e)}'
     finally:
         for path in staged_paths:
             remove_file(path)
     force_usage = '/强制加图 ' + ' '.join(gallery_tokens) + ' [图片]'
-    msg += f'\n如需跳过 pHash 相似检查，请重新发送图片并使用：{force_usage}'
-    if not pending_links:
+    msg += f'\n可使用：{force_usage} 跳过 pHash 检查。'
+    if not phash_links:
         return await ctx.asend_fold_msg_adaptive(msg)
+    msg += '\n回复“/取消”将删除跨图库相似图链接。'
 
-    msg += f'\n发送“/确认”后创建 {len(pending_links)} 个链接。'
+    async def cancel_phash_actions(cancel_ctx: HandlerContext):
+        affected_galleries = {link.gallery for link in phash_links}
+        for gallery in sorted(affected_galleries):
+            await cancel_ctx.block(f'nsy:add:{gallery}')
 
-    def validate_confirmation(confirm_ctx: HandlerContext):
-        if confirm_ctx.get_args().strip():
-            raise ReplyException('加图确认不需要参数，请发送：/确认')
-
-    async def confirm(confirm_ctx: HandlerContext):
-        for gallery in sorted({pending.gallery for pending in pending_links}):
-            await confirm_ctx.block(f'nsy:add:{gallery}')
-
-        added: list[NsyImage] = []
-        repeats: list[tuple[SimilarUploadLinkConfirmation, NsyImage]] = []
-        errors = []
-        for pending in pending_links:
+        removed: list[NsyImage] = []
+        skipped = []
+        for link in phash_links:
             try:
-                # 根 pid 和上传特征已由报告时的全库比较固定；
-                # 确认阶段只验证根仍存在并执行硬链接操作。
-                root = manager.find_image(pending.link_root_pid)
-                if root is None or not osp.exists(manager.get_image_path(root)):
-                    raise ReplyException(f'链接根 pid={pending.link_root_pid} 已失效')
-
-                image, duplicated = manager.add_image_from_file(
-                    pending.gallery,
-                    pending.staged_path,
-                    uploader_id=confirm_ctx.user_id,
-                    group_id=confirm_ctx.group_id or 0,
-                    info=pending.info,
-                    image_hash=pending.image_hash,
-                    image_phash=pending.phash,
-                    preferred_link_root=root,
-                )
-                if image is not None:
-                    added.append(image)
-                elif duplicated is not None:
-                    repeats.append((pending, duplicated))
+                removed.append(_cancel_phash_link(manager, link))
             except ReplyException as e:
-                errors.append(
-                    f'图库“{pending.gallery}”第{pending.upload_index}张: {get_exc_desc(e)}'
+                skipped.append(
+                    f'图库“{link.gallery}”第{link.upload_index}张: {get_exc_desc(e)}'
                 )
             except Exception as e:
-                logger.print_exc(
-                    f'链接加图到“{pending.gallery}”失败'
-                )
-                errors.append(
-                    f'图库“{pending.gallery}”第{pending.upload_index}张: {get_exc_desc(e)}'
+                logger.print_exc(f'取消图库“{link.gallery}”pHash 链接失败')
+                skipped.append(
+                    f'图库“{link.gallery}”第{link.upload_index}张: {get_exc_desc(e)}'
                 )
 
         _append_operation_log(
-            confirm_ctx.event,
+            cancel_ctx.event,
             (
-                '链接确认 '
-                f'added={[image.pid for image in added]} '
-                f'repeated={[image.pid for _, image in repeats]} errors={errors}'
+                '取消pHash链接 '
+                f'removed_links={[image.pid for image in removed]} '
+                f'skipped={skipped}'
             ),
         )
         result_lines = [
-            f'链接加图完成: {len(added)}/{len(pending_links)}'
+            '已取消本次跨图库 pHash 链接',
+            f'撤销链接: {len(removed)}/{len(phash_links)}',
         ]
-        result_lines.extend(
-            f'图库“{image.gallery}”: pid={image.pid}，根 pid={image.linked_to_pid}'
-            for image in added
-        )
-        result_lines.extend(
-            f'图库“{pending.gallery}”第{pending.upload_index}张已存在: pid={image.pid}'
-            for pending, image in repeats
-        )
-        if errors:
-            result_lines.append('失败:')
-            result_lines.extend(errors)
-        await confirm_ctx.asend_fold_msg_adaptive('\n'.join(result_lines))
+        if removed:
+            result_lines.append(
+                '删除链接 pid: ' + ' '.join(str(image.pid) for image in removed)
+            )
+        if skipped:
+            result_lines.append('未完成:')
+            result_lines.extend(skipped)
+        await cancel_ctx.asend_fold_msg_adaptive('\n'.join(result_lines))
 
-    await add_need_confirm_action(
+    await add_cancellable_action(
         ctx,
-        confirm,
+        cancel_phash_actions,
         additional_msg=msg,
         timeout=timedelta(minutes=5),
-        confirmation_validator=validate_confirmation,
     )
 
 
@@ -2262,7 +2285,6 @@ async def _(ctx: HandlerContext):
         confirm,
         additional_msg=msg,
         timeout=timedelta(minutes=5),
-        require_reply=True,
         allow_cancel_command=False,
         confirmation_validator=validate_confirmation,
     )

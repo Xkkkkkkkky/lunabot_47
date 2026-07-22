@@ -1,10 +1,15 @@
-qps_limit: 5
+# 自建 New API/OpenAI 兼容网关配置，模型前缀为 na:。
+qps_limit: 5  # 当前进程对该供应方的每秒请求上限
+# 该供应方当前不支持自动查余额；支持整数或简单四则运算表达式。
 quota_sync_interval_sec: 60*60*6
-price_unit: "$"
+price_unit: "$"  # 价格和本地余额日志使用的显示单位
 
-api_key: "xxx"
-base_url: "https://xxx/v1"
+# 网关密钥和地址属于私密部署信息，只能填写在真实 config。
+api_key: ""
+base_url: ""
 
+# name 是 bot 内名称；model_id 是网关实际模型 ID，省略时使用 name；
+# is_multimodal 控制是否允许把图片随请求发送。
 models:
   - name: "gemini-2.0-flash"
     model_id: "3885-gemini-2.0-flash"

@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from typing import Sequence
 
 import jieba
-import jieba.posseg as pseg
 import wordcloud
 from PIL import Image, ImageDraw
 
@@ -22,9 +21,10 @@ from .tokenizer import (
     analyze_messages,
     apply_keyword_decisions,
     build_generic_baselines,
+    get_smart_tokenizer,
     reset_smart_tokenizer,
 )
-from .word_dictionary import get_llm_dictionary_words
+from .word_dictionary import get_llm_dictionary_words, get_nsy_dictionary_words
 
 config = Config("sta")
 logger = get_logger("Sta")
@@ -324,13 +324,17 @@ def _build_pie_entries(
 async def _download_pie_avatars(gid, entries: Sequence[StaPieEntry]) -> None:
     """并发获取图例头像；单个头像失败不会阻断统计图。"""
 
-    bot = await aget_group_bot(gid, raise_exc=False)
+    bot = (
+        await aget_group_bot(gid, raise_exc=False)
+        if gid is not None
+        else None
+    )
 
     async def download(entry: StaPieEntry):
         if entry.user_id is None:
             return None
         try:
-            return await download_avatar(bot, entry.user_id, circle=True)
+            return await download_avatar(bot, int(entry.user_id), circle=True)
         except Exception:
             logger.print_exc(f"获取{entry.user_id}头像失败")
             return None
@@ -837,11 +841,19 @@ def _daily_message_series(recs):
 
 last_userwords = []
 last_llm_dictionary_words = []
+last_nsy_dictionary_words = []
 jieba_inited = False
+
+
+def _get_dictionary_words(stopwords):
+    llm_words = get_llm_dictionary_words(stopwords=stopwords)
+    nsy_words = get_nsy_dictionary_words(stopwords=stopwords)
+    return llm_words, nsy_words, sorted(set(llm_words + nsy_words))
 
 # jieba重置（用户词典）
 def reset_jieba():
-    global last_userwords, last_llm_dictionary_words, jieba_inited
+    global last_userwords, last_llm_dictionary_words
+    global last_nsy_dictionary_words, jieba_inited
     jieba.initialize()
     # 清空上次添加的用户词
     for word in last_userwords: jieba.del_word(word)
@@ -852,12 +864,13 @@ def reset_jieba():
     stopwords = [word.strip() for word in stopwords if word.strip() != ""]
     userwords = list(set(userwords))
     stopwords = list(set(stopwords))
-    llm_dictionary_words = [
+    llm_dictionary_words, nsy_dictionary_words, dictionary_words = _get_dictionary_words(stopwords)
+    dictionary_words = [
         word
-        for word in get_llm_dictionary_words(stopwords=stopwords)
+        for word in dictionary_words
         if word not in userwords
     ]
-    loaded_words = list(set(userwords + llm_dictionary_words))
+    loaded_words = list(set(userwords + dictionary_words))
     userwords_str = "\n".join([f'{word} n' for word in loaded_words])
     file_db.set("stopwords", stopwords)
     file_db.set("userwords", userwords)
@@ -866,19 +879,25 @@ def reset_jieba():
     jieba.load_userdict(userwords_file)
     last_userwords = loaded_words
     last_llm_dictionary_words = llm_dictionary_words
+    last_nsy_dictionary_words = nsy_dictionary_words
     jieba_inited = True
     reset_smart_tokenizer()
     logger.info(
         f'jieba已重置 用户词数:{len(userwords)} '
-        f'LLM辅助词数:{len(llm_dictionary_words)} 停用词数:{len(stopwords)}'
+        f'LLM辅助词数:{len(llm_dictionary_words)} '
+        f'NSY图库词数:{len(nsy_dictionary_words)} 停用词数:{len(stopwords)}'
     )
 
 # jieba初始化
 def init_jieba():
-    global jieba_inited, last_llm_dictionary_words
+    global jieba_inited, last_llm_dictionary_words, last_nsy_dictionary_words
     stopwords = file_db.get("stopwords", [])
-    llm_dictionary_words = get_llm_dictionary_words(stopwords=stopwords)
-    if not jieba_inited or llm_dictionary_words != last_llm_dictionary_words:
+    llm_dictionary_words, nsy_dictionary_words, _ = _get_dictionary_words(stopwords)
+    if (
+        not jieba_inited
+        or llm_dictionary_words != last_llm_dictionary_words
+        or nsy_dictionary_words != last_nsy_dictionary_words
+    ):
         reset_jieba()
 
 
@@ -1035,7 +1054,7 @@ async def prepare_word_analysis(gid, date_str, recs) -> KeywordAnalysis | None:
     init_jieba()
     userwords = file_db.get("userwords", [])
     stopwords = file_db.get("stopwords", [])
-    dictionary_words = get_llm_dictionary_words(stopwords=stopwords)
+    _, _, dictionary_words = _get_dictionary_words(stopwords)
     statistical_filter = bool(
         config.get("word_tokenizer.statistical_filter", True, raise_exc=False)
     )
@@ -1127,7 +1146,7 @@ def draw_wordcloud(
 
     userwords = file_db.get("userwords", [])
     stopwords = file_db.get("stopwords", [])
-    dictionary_words = get_llm_dictionary_words(stopwords=stopwords)
+    _, nsy_dictionary_words, dictionary_words = _get_dictionary_words(stopwords)
     tokenizer_mode = _get_word_tokenizer_mode()
     statistical_filter = bool(
         config.get("word_tokenizer.statistical_filter", True, raise_exc=False)
@@ -1152,21 +1171,27 @@ def draw_wordcloud(
     else:
         if tokenizer_mode not in {"legacy", "old"}:
             logger.warning(f"未知分词模式 {tokenizer_mode}，回退到 legacy")
-        legacy_userwords = set(userwords)
+        legacy_userwords = set(userwords) | set(nsy_dictionary_words)
         legacy_stopwords = set(stopwords)
+        legacy_tokenizer = get_smart_tokenizer(
+            userwords=legacy_userwords,
+            stopwords=legacy_stopwords,
+            dictionary_words=(
+                word for word in dictionary_words if word not in legacy_userwords
+            ),
+        )
         all_words = {}
         raw_word_counts = {}
         word_user_count = {} # word_user_count[word][user] = count
 
         for rec in recs:
             msg = extract_text(rec['msg'])
-            words = pseg.cut(msg)
             nouns = []
-            for word, flag in words:
-                if word in legacy_userwords:
-                    nouns.append(word)
-                elif flag.startswith('n') and word not in legacy_stopwords and len(word) > 1:
-                    nouns.append(word)
+            for candidate in legacy_tokenizer.tokenize(msg):
+                if candidate.forced:
+                    nouns.append(candidate.surface)
+                elif candidate.pos.startswith('n') and len(candidate.key) > 1:
+                    nouns.append(candidate.surface)
             for noun in nouns:
                 if noun not in all_words:
                     all_words[noun] = 0
@@ -1323,7 +1348,7 @@ async def _download_word_rank_avatars(
 
     async def download(user_id):
         try:
-            return await download_avatar(bot, user_id, circle=True)
+            return await download_avatar(bot, int(user_id), circle=True)
         except Exception:
             logger.print_exc(f"获取{user_id}关键词统计头像失败")
             return None
@@ -1823,6 +1848,7 @@ async def _render_word_count_report(
     user_counts,
     user_date_counts,
     word,
+    group_id,
 ) -> Image.Image:
     """绘制 `/sta_word` 使用的用户占比与每日堆叠柱状图。"""
 
@@ -1845,6 +1871,7 @@ async def _render_word_count_report(
                 is_other=True,
             )
         )
+    await _download_pie_avatars(group_id, entries)
 
     ordered_indices = sorted(range(len(dates)), key=lambda index: dates[index])
     labels = [dates[index].strftime("%m-%d") for index in ordered_indices]
@@ -1942,6 +1969,7 @@ async def render_word_count_report(
             user_counts,
             user_date_counts,
             word,
+            group_id,
         )
     finally:
         _STA_STYLE_CONTEXT.reset(token)
