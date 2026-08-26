@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
 from uuid import uuid4
 
+from .action_names import ACTION_NAMES_BY_ACTOR, ACTOR_NAMES, COMMON_ACTION_NAMES
+
 
 EVENT_DAMAGE = "damage"
 EVENT_LOAD_PARTY = "load_party"
@@ -17,16 +19,6 @@ KNOWN_EVENT_TYPES = {
     EVENT_ENTER_AREA,
     EVENT_INC_DEATH_CNT,
 }
-
-COMMON_ACTION_NAMES = {
-    -1: "Link Attack",
-    -2: "Skybound Art",
-    -3: "Supplementary Damage",
-    -0x100: "DoT",
-    5000: "Ether Round",
-    5010: "Charged Shot",
-}
-
 
 def _safe_int(value: Any, default: int = 0) -> int:
     try:
@@ -58,8 +50,25 @@ def format_duration(seconds: float) -> str:
     return f"{minute:d}:{sec:02d}"
 
 
-def action_display_name(action_id: int) -> str:
-    return COMMON_ACTION_NAMES.get(action_id, f"Action {action_id}")
+def actor_display_name(actor_type: str) -> str:
+    """按伤害源类型解析角色名。
+
+    load_party.c_name 在部分队伍成员上会是损坏或错位数据，
+    GBFR-ACT 前端同样使用 actor type 翻译角色，未知类型保留原值。
+    """
+
+    actor_type = str(actor_type or "UNKNOWN").upper()
+    return ACTOR_NAMES.get(actor_type, actor_type)
+
+
+def action_display_name(action_id: int, actor_type: str = "") -> str:
+    """按角色类型解析动作名，未知动作保留原始 ID 方便后续补表。"""
+
+    actor_actions = ACTION_NAMES_BY_ACTOR.get(str(actor_type).upper(), {})
+    return actor_actions.get(
+        action_id,
+        COMMON_ACTION_NAMES.get(action_id, f"动作 {action_id}"),
+    )
 
 
 def event_action_id(data: Dict[str, Any]) -> int:
@@ -75,6 +84,7 @@ class BattleOptions:
     min_damage: int = 0
     ignore_non_party_sources: bool = True
     ignored_target_type_ids: set[int] = field(default_factory=set)
+    idle_finish_seconds: int = 120
 
     @classmethod
     def from_config(cls, cfg: Dict[str, Any] | None) -> "BattleOptions":
@@ -86,6 +96,10 @@ class BattleOptions:
             min_damage=max(0, _safe_int(cfg.get("min_damage"), 0)),
             ignore_non_party_sources=bool(cfg.get("ignore_non_party_sources", True)),
             ignored_target_type_ids=ignored,
+            idle_finish_seconds=max(
+                0,
+                _safe_int(cfg.get("idle_finish_seconds"), 120),
+            ),
         )
 
 
@@ -128,6 +142,7 @@ class ActorRef:
 @dataclass
 class ActionStats:
     action_id: int
+    actor_type: str = ""
     hit: int = 0
     damage: int = 0
     min_damage: int = -1
@@ -141,7 +156,7 @@ class ActionStats:
 
     @property
     def name(self) -> str:
-        return action_display_name(self.action_id)
+        return action_display_name(self.action_id, self.actor_type)
 
     def add_damage(self, damage: int) -> None:
         self.hit += 1
@@ -208,20 +223,21 @@ class ActorStats:
 
     def display_name(self, show_username: bool = True) -> str:
         prefix = f"[{self.ref.party_idx}]" if self.ref.party_idx >= 0 else ""
+        character_name = actor_display_name(self.ref.type_name)
         if self.member_info:
-            c_name = str(self.member_info.get("c_name") or "").strip()
             d_name = str(self.member_info.get("d_name") or "").strip()
             if show_username and d_name:
-                return f"{prefix}{d_name}({self.ref.type_name})"
-            if c_name:
-                return f"{prefix}{c_name}({self.ref.type_name})"
-        return f"{prefix}{self.ref.short_name}"
+                return f"{prefix}{d_name}({character_name})"
+        return f"{prefix}{character_name}"
 
     def add_damage(self, target: ActorRef, damage: int, action_id: int) -> None:
         self.hit += 1
         self.damage += damage
         if action_id not in self.actions:
-            self.actions[action_id] = ActionStats(action_id=action_id)
+            self.actions[action_id] = ActionStats(
+                action_id=action_id,
+                actor_type=self.ref.type_name,
+            )
         self.actions[action_id].add_damage(damage)
         if target.key not in self.targets:
             self.targets[target.key] = TargetStats(ref=target)
@@ -325,6 +341,11 @@ class BattleRecord:
                 hit += 1
 
         if damage_points:
+            # GBFR-ACT 以有效的队伍伤害作为战斗活动：load_party 可能在真正
+            # 开战前很久到达，最后一次伤害后的归档等待也不属于战斗曲线。
+            # 因此报告时间轴严格截取首个至末个有效伤害点；事件本身仍完整
+            # 保留，以便角色信息、死亡次数和归档记录可以正常重建。
+            start_time_ms = min(point.time_ms for point in damage_points)
             end_time_ms = max(point.time_ms for point in damage_points)
         if battle_id is None:
             battle_id = make_battle_id(start_time_ms)
@@ -405,6 +426,7 @@ class BattleRecorder:
     def __init__(self, options: BattleOptions | None = None):
         self.options = options or BattleOptions()
         self.current_events: list[dict[str, Any]] = []
+        self.pending_party_event: dict[str, Any] | None = None
         self.current_id: str | None = None
         self.last_event_time_ms = 0
         self.last_damage_time_ms = 0
@@ -419,17 +441,56 @@ class BattleRecorder:
         self.last_event_time_ms = max(self.last_event_time_ms, time_ms)
 
         if event_type == EVENT_ENTER_AREA:
+            if self.current_events:
+                self.current_events.append(dict(event))
+            self.pending_party_event = None
             return self.finish("enter_area")
 
-        if event_type not in KNOWN_EVENT_TYPES:
-            return None
+        completed_record = None
+        idle_ms = self.options.idle_finish_seconds * 1000
+        if (
+            self.current_events
+            and self.last_damage_time_ms > 0
+            and time_ms > self.last_damage_time_ms
+            and time_ms - self.last_damage_time_ms >= idle_ms
+        ):
+            # 不只依赖后台轮询：当新事件的时间已经跨过空闲
+            # 边界时，先结算上一场，再处理这条事件。
+            completed_record = self.finish("idle")
 
-        if not self.current_events:
+        if event_type == EVENT_LOAD_PARTY:
+            if self.current_events:
+                self.current_events.append(dict(event))
+            else:
+                # ACT 在非战斗期会反复发送队伍快照。只保留最新
+                # 一份，等首次伤害到来后才真正建立新战斗。
+                self.pending_party_event = dict(event)
+            return completed_record
+
+        if event_type not in KNOWN_EVENT_TYPES:
+            # 战斗已开始后仍保留未识别的原始事件，便于日后排查
+            # 或扩展协议；BattleRecord.from_events 不会将它们计入统计。
+            if self.current_events:
+                self.current_events.append(dict(event))
+            return completed_record
+
+        if event_type == EVENT_DAMAGE and not self.current_events:
             self.current_id = make_battle_id(time_ms)
+            pending_event = self.pending_party_event
+            self.pending_party_event = None
+            if pending_event:
+                pending_time_ms = _event_time_ms(pending_event)
+                if 0 <= time_ms - pending_time_ms <= idle_ms:
+                    self.current_events.append(pending_event)
+
+        # 无伤害时的死亡计数不能创建或污染下一场战斗。
+        if not self.current_events and event_type != EVENT_DAMAGE:
+            return completed_record
+
         self.current_events.append(dict(event))
         if event_type == EVENT_DAMAGE:
-            self.last_damage_time_ms = time_ms
-        return None
+            self.last_damage_time_ms = max(self.last_damage_time_ms, time_ms)
+        return completed_record
 
     def finish_if_idle(self, now_ms: int, idle_ms: int) -> BattleRecord | None:
         if not self.current_events or self.last_damage_time_ms <= 0:
@@ -440,6 +501,7 @@ class BattleRecorder:
 
     def finish(self, reason: str) -> BattleRecord | None:
         if not self.current_events:
+            self.pending_party_event = None
             return None
         record = BattleRecord.from_events(
             self.current_events,
@@ -449,6 +511,7 @@ class BattleRecorder:
             finish_reason=reason,
         )
         self.current_events = []
+        self.pending_party_event = None
         self.current_id = None
         self.last_damage_time_ms = 0
         if not record.is_meaningful:

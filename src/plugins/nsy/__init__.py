@@ -1,6 +1,8 @@
 from ..utils import *
 from nonebot import on_message
 import hashlib
+import struct
+import zlib
 from dataclasses import replace
 
 from .image_dedup import (
@@ -46,6 +48,9 @@ GALLERY_SUGGESTION_LIMIT = 5
 GALLERY_SUGGESTION_MAX_DISTANCE = 2
 DEFAULT_RECENT_IMAGE_WEIGHT_MULTIPLIERS = (0.05, 0.2, 0.4, 0.6, 0.8)
 CREATED_AT_FORMAT = '%Y-%m-%d %H:%M:%S'
+PNG_RECOMPRESS_MIN_SIZE = 1024 * 1024
+PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+PNG_ALPHA_COLOR_TYPES = {4, 6}
 
 
 @dataclass
@@ -243,6 +248,129 @@ def _inspect_image_file(path: str, check_size: bool = True) -> ImageInfo:
     return ImageInfo(fmt=fmt, ext=IMAGE_EXT_BY_FORMAT[fmt], width=width, height=height, size=size)
 
 
+def _pack_png_chunk(chunk_type: bytes, payload: bytes) -> bytes:
+    """按 PNG 数据块格式写入长度和 CRC。"""
+    crc = zlib.crc32(chunk_type)
+    crc = zlib.crc32(payload, crc)
+    return (
+        struct.pack('>I', len(payload))
+        + chunk_type
+        + payload
+        + struct.pack('>I', crc & 0xffffffff)
+    )
+
+
+def _recompress_static_opaque_png(path: Path) -> tuple[int, int, str] | None:
+    """
+    仅重压静态、不透明、最低压缩级别 PNG 的 IDAT 数据流。
+
+    解压后的 PNG 扫描线字节保持完全一致；非 IDAT 数据块也逐字节保留，
+    因此不会改变像素、滤镜、色彩配置或文本元数据。新结果没有变小时不写回。
+    """
+    stat = path.stat(follow_symlinks=False)
+    if stat.st_size < PNG_RECOMPRESS_MIN_SIZE:
+        return None
+
+    original = path.read_bytes()
+    if not original.startswith(PNG_SIGNATURE):
+        return None
+
+    chunks: list[tuple[bytes, bytes, bytes]] = []
+    idat_parts: list[bytes] = []
+    color_type: int | None = None
+    has_transparency = False
+    is_animated = False
+    offset = len(PNG_SIGNATURE)
+    end_offset = offset
+
+    while offset + 12 <= len(original):
+        chunk_start = offset
+        length = struct.unpack('>I', original[offset:offset + 4])[0]
+        chunk_end = offset + 12 + length
+        if chunk_end > len(original):
+            raise ValueError('PNG 数据块长度越界')
+
+        chunk_type = original[offset + 4:offset + 8]
+        payload = original[offset + 8:offset + 8 + length]
+        raw_chunk = original[chunk_start:chunk_end]
+        chunks.append((chunk_type, payload, raw_chunk))
+        if chunk_type == b'IHDR':
+            if len(payload) != 13:
+                raise ValueError('PNG IHDR 长度无效')
+            color_type = payload[9]
+        elif chunk_type == b'IDAT':
+            idat_parts.append(payload)
+        elif chunk_type == b'tRNS':
+            has_transparency = True
+        elif chunk_type == b'acTL':
+            is_animated = True
+
+        offset = chunk_end
+        end_offset = offset
+        if chunk_type == b'IEND':
+            break
+
+    if (
+        color_type is None
+        or color_type in PNG_ALPHA_COLOR_TYPES
+        or has_transparency
+        or is_animated
+        or not idat_parts
+    ):
+        return None
+
+    compressed = b''.join(idat_parts)
+    # zlib FLG 的 FLEVEL=0 表示最低压缩级别；只处理目标中的无压缩 PNG。
+    if len(compressed) < 2 or compressed[1] >> 6 != 0:
+        return None
+
+    decompressor = zlib.decompressobj()
+    scanlines = decompressor.decompress(compressed) + decompressor.flush()
+    if not decompressor.eof or decompressor.unused_data or decompressor.unconsumed_tail:
+        raise ValueError('PNG IDAT zlib 数据流无效')
+    recompressed = zlib.compress(scanlines, level=9)
+    if len(recompressed) >= len(compressed):
+        return None
+
+    rebuilt = bytearray(PNG_SIGNATURE)
+    wrote_idat = False
+    for chunk_type, _, raw_chunk in chunks:
+        if chunk_type == b'IDAT':
+            if not wrote_idat:
+                rebuilt.extend(_pack_png_chunk(b'IDAT', recompressed))
+                wrote_idat = True
+            continue
+        rebuilt.extend(raw_chunk)
+    rebuilt.extend(original[end_offset:])
+
+    optimized = bytes(rebuilt)
+    try:
+        with path.open('r+b') as image_file:
+            image_file.write(optimized)
+            image_file.truncate()
+            image_file.flush()
+            os.fsync(image_file.fileno())
+        os.utime(
+            path,
+            ns=(stat.st_atime_ns, stat.st_mtime_ns),
+            follow_symlinks=False,
+        )
+    except Exception:
+        with path.open('r+b') as image_file:
+            image_file.write(original)
+            image_file.truncate()
+            image_file.flush()
+            os.fsync(image_file.fileno())
+        os.utime(
+            path,
+            ns=(stat.st_atime_ns, stat.st_mtime_ns),
+            follow_symlinks=False,
+        )
+        raise
+
+    return len(original), len(optimized), hashlib.sha256(optimized).hexdigest()
+
+
 def _append_operation_log(event: MessageEvent, operation: str):
     """
     追加 JSON Lines 操作日志，记录操作者、群号、时间和操作内容。
@@ -282,7 +410,7 @@ def _format_upload_result(
     images_by_pid: dict[int, NsyImage],
 ) -> str:
     lines = [
-        f'图库"{gallery}": 添加{len(added)}张，共{total}张'
+        f'图库"{gallery}": 成功添加{len(added)}张，共{total}张'
     ]
     if added:
         lines.append('pid: ' + ' '.join(str(image.pid) for image in added))
@@ -318,10 +446,13 @@ def _format_reload_result(result: dict) -> str:
         '图库重载完成',
         f'图库数: {result["gallery_count"]}',
         f'图片数: {result["image_count"]}',
+        f'压缩 PNG: {result["compressed_png_count"]}',
+        f'压缩节省: {get_readable_file_size(result["png_saved_bytes"])}',
         f'新增索引: {len(result["added_pids"])}',
         f'删除失效索引: {len(result["removed_pids"])}',
         f'重命名文件: {len(result["renamed_files"])}',
         f'无效图片: {len(result["invalid_files"])}',
+        f'压缩失败: {len(result["png_compression_errors"])}',
         f'删除失效别名: {len(result["removed_aliases"])}',
     ]
     if result['added_pids']:
@@ -669,6 +800,45 @@ class NsyManager:
             raise
 
         return renamed_files
+
+    @staticmethod
+    def _recompress_reload_pngs(
+        candidates: list[ReloadImageCandidate],
+    ) -> tuple[dict[tuple[int, int], str], int, int, list[str]]:
+        """按物理文件重压目标 PNG，并同步所有硬链接候选项的文件大小。"""
+        candidates_by_inode: dict[tuple[int, int], list[ReloadImageCandidate]] = {}
+        for candidate in candidates:
+            candidates_by_inode.setdefault(candidate.inode, []).append(candidate)
+
+        hashes_by_inode: dict[tuple[int, int], str] = {}
+        compressed_count = 0
+        saved_bytes = 0
+        errors: list[str] = []
+        for inode, linked_candidates in candidates_by_inode.items():
+            candidate = linked_candidates[0]
+            if candidate.info.fmt != 'PNG':
+                continue
+            try:
+                result = _recompress_static_opaque_png(candidate.path)
+            except Exception as e:
+                relative_path = f'{candidate.gallery}/{candidate.path.name}'
+                errors.append(f'{relative_path}: {get_exc_desc(e)}')
+                logger.warning(f'NSY 重载压缩 PNG 失败: {errors[-1]}')
+                continue
+            if result is None:
+                continue
+
+            old_size, new_size, image_hash = result
+            hashes_by_inode[inode] = image_hash
+            compressed_count += 1
+            saved_bytes += old_size - new_size
+            for linked_candidate in linked_candidates:
+                linked_candidate.info = replace(
+                    linked_candidate.info,
+                    size=new_size,
+                )
+
+        return hashes_by_inode, compressed_count, saved_bytes, errors
 
     def resolve_gallery(self, name_or_alias: str, raise_if_missing: bool = False) -> str | None:
         """仅通过 aliases 总表把图库名称或别名解析为规范图库名。"""
@@ -1502,6 +1672,7 @@ class NsyManager:
         - 所有有效图片按 created_at 从早到晚全局重新编号为 1...N，并重命名为 pid.ext；
         - 索引中有、文件已不存在的图片会从索引移除；
         - 文件存在但索引缺失的图片会加入索引；
+        - 大于等于 1 MiB 的静态、无透明通道、最低压缩级别 PNG 会无损重压；
         - 已有索引直接复用 SHA-256 和 pHash，仅新物理文件计算特征；
         - 指向不存在图库的别名会被删除。
         """
@@ -1541,6 +1712,12 @@ class NsyManager:
                     ),
                 ))
 
+        (
+            recompressed_hashes_by_inode,
+            compressed_png_count,
+            png_saved_bytes,
+            png_compression_errors,
+        ) = self._recompress_reload_pngs(candidates)
         candidates.sort(key=self._reload_candidate_sort_key)
         renamed_files = self._renumber_reload_files(candidates)
         new_images_by_gallery: dict[str, dict[int, NsyImage]] = {
@@ -1566,7 +1743,13 @@ class NsyManager:
             if candidate.old_image is not None:
                 feature_by_inode.setdefault(
                     candidate.inode,
-                    (candidate.old_image.hash, candidate.old_image.phash),
+                    (
+                        recompressed_hashes_by_inode.get(
+                            candidate.inode,
+                            candidate.old_image.hash,
+                        ),
+                        candidate.old_image.phash,
+                    ),
                 )
 
         for candidate in candidates:
@@ -1574,7 +1757,8 @@ class NsyManager:
                 # 只有无任何旧索引的新物理文件需要计算特征；
                 # 同 inode 的多个新硬链接仍只计算一次。
                 feature_by_inode[candidate.inode] = (
-                    _sha256_file(str(candidate.path)),
+                    recompressed_hashes_by_inode.get(candidate.inode)
+                    or _sha256_file(str(candidate.path)),
                     compute_phash(candidate.path),
                 )
             image_hash, image_phash = feature_by_inode[candidate.inode]
@@ -1630,6 +1814,9 @@ class NsyManager:
             'removed_pids': removed_pids,
             'renamed_files': renamed_files,
             'invalid_files': invalid_files,
+            'compressed_png_count': compressed_png_count,
+            'png_saved_bytes': png_saved_bytes,
+            'png_compression_errors': png_compression_errors,
             'removed_aliases': removed_aliases,
             'gallery_count': len(gallery_names),
             'image_count': len(self.images_by_pid),
@@ -2302,6 +2489,9 @@ async def _(ctx: HandlerContext):
             f'galleries={result["gallery_count"]} images={result["image_count"]} '
             f'added={result["added_pids"]} removed={result["removed_pids"]} '
             f'renamed={len(result["renamed_files"])} invalid={len(result["invalid_files"])} '
+            f'compressed_png={result["compressed_png_count"]} '
+            f'png_saved_bytes={result["png_saved_bytes"]} '
+            f'png_compression_errors={len(result["png_compression_errors"])} '
             f'removed_aliases={result["removed_aliases"]}'
         ),
     )

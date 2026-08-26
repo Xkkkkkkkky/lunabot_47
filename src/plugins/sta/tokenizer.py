@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 import math
 import re
 import statistics
+import string
 import unicodedata
 
 import jieba
@@ -35,6 +36,7 @@ LATIN_TOKEN_RE = re.compile(
 )
 
 CJK_RE = re.compile(r"^[\u3400-\u4dbf\u4e00-\u9fff]+$")
+ASCII_PUNCTUATION = frozenset(string.punctuation)
 
 
 # 这里只放几乎没有主题信息的英文功能词。管理员用户词可以显式覆盖该集合。
@@ -86,6 +88,68 @@ def normalize_key(word: str) -> str:
     if any("A" <= ch <= "Z" or "a" <= ch <= "z" for ch in word):
         return word.casefold()
     return word
+
+
+def _is_punctuation_char(char: str) -> bool:
+    """判断字符是否属于聊天文本中的标点。
+
+    Unicode ``P*`` 类别覆盖中英文标点；ASCII 额外包含 ``+``、``=``、
+    ``~`` 等日常也作为标点串使用、但在 Unicode 中被归为符号的字符。
+    """
+
+    return char in ASCII_PUNCTUATION or unicodedata.category(char).startswith("P")
+
+
+def _is_variation_selector(char: str) -> bool:
+    """允许文本样式选择符连接相邻的 Unicode 标点，但不把它计作标点。"""
+
+    codepoint = ord(char)
+    return (
+        0xFE00 <= codepoint <= 0xFE0F
+        or 0xE0100 <= codepoint <= 0xE01EF
+    )
+
+
+def _punctuation_base_count(text: str) -> int:
+    """若文本完全由标点及其样式选择符构成，返回实际标点字符数。"""
+
+    count = 0
+    for char in text:
+        if _is_punctuation_char(char):
+            count += 1
+        elif not (count and _is_variation_selector(char)):
+            return 0
+    return count
+
+
+def _extract_punctuation_runs(text: str) -> tuple[list[str], str]:
+    """提取至少含两个标点字符的连续串，并从后续分词文本中挖空所有标点。"""
+
+    runs: list[str] = []
+    chars = list(text)
+    index = 0
+    while index < len(text):
+        if not _is_punctuation_char(text[index]):
+            index += 1
+            continue
+
+        start = index
+        punctuation_count = 0
+        while index < len(text):
+            char = text[index]
+            if _is_punctuation_char(char):
+                punctuation_count += 1
+                index += 1
+            elif punctuation_count and _is_variation_selector(char):
+                index += 1
+            else:
+                break
+
+        chars[start:index] = " " * (index - start)
+        if punctuation_count >= 2:
+            runs.append(text[start:index])
+
+    return runs, "".join(chars)
 
 
 @dataclass(frozen=True)
@@ -174,7 +238,7 @@ class SmartTokenizer:
         known_surfaces = {
             surface: (key, self.userword_surfaces[key], True)
             for key, surface in normalized_userwords
-            if not LATIN_TOKEN_RE.fullmatch(surface)
+            if not _punctuation_base_count(surface)
         }
         for word in dictionary_words:
             surface = normalize_text(word).strip()
@@ -183,7 +247,7 @@ class SmartTokenizer:
                 forced = key in self.userword_surfaces
                 if not forced:
                     self._jieba.add_word(surface, tag="n")
-                if not LATIN_TOKEN_RE.fullmatch(surface):
+                if not _punctuation_base_count(surface):
                     known_surfaces.setdefault(
                         surface,
                         (
@@ -275,8 +339,22 @@ class SmartTokenizer:
                 )
             )
 
-        # 英文已单独提取，从中文输入中挖掉，防止 jieba 重复计数。
-        chinese_text = LATIN_TOKEN_RE.sub(" ", text)
+        # 英文已单独提取，从后续输入中挖掉，既防止 jieba 重复计数，也避免
+        # C++、C# 等技术标识符末尾的符号被重复识别为标点串。
+        non_latin_text = LATIN_TOKEN_RE.sub(" ", text)
+        punctuation_runs, chinese_text = _extract_punctuation_runs(non_latin_text)
+        for surface in punctuation_runs:
+            key = normalize_key(surface)
+            if key not in self.stopwords:
+                candidates.append(
+                    TokenCandidate(
+                        key=key,
+                        surface=surface,
+                        pos="w",
+                        source="punctuation",
+                    )
+                )
+
         for pair in self._posseg.cut(chinese_text):
             surface = normalize_text(pair.word).strip()
             key = normalize_key(surface)

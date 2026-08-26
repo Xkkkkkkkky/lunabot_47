@@ -1,0 +1,8 @@
+# 数据源地址属于部署资源信息，只在真实 config/codexreset.yaml 中填写。
+feed_url: ""
+
+poll_interval_minutes:
+  min: 5
+  max: 15
+
+request_timeout_seconds: 20

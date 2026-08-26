@@ -39,7 +39,7 @@
 - `(回复一张图片) @bot 请翻译图片中的文字` 图片询问
 - `@bot 第100个质数是什么？请你编写Python代码并立刻执行来告诉我答案。` 调用Python的询问
 - `@bot cleanmode 你好` 干净模式询问
-- `@bot model:gpt-4o 你好` 指定模型询问
+- `@bot model:deepseek-v4-flash-vision-exp 你好` 指定模型询问
 - `/chat 你好` 普通询问的另外一种方式
 
 
@@ -90,8 +90,8 @@
 默认修改文本+多模态模型，加上text/mm/tool/image参数可单独修改文本/多模态/工具/图片生成模型  
 
 - `/chat model` 查询当前模型
-- `/chat_model gpt-4o` 修改文本和多模态模型为 gpt-4o
-- `/chat_model text o1-mini` 只修改文本模型为 o1-mini
+- `/chat_model deepseek-v4-flash-vision-exp` 修改文本和多模态模型
+- `/chat_model text deepseek-v4-flash-vision-exp` 只修改文本模型
 
 
 ### 重置聊天模型

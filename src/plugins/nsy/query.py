@@ -68,6 +68,7 @@ FORMAT_PIE_HEIGHT = 250
 PREVIEW_CANVAS_WIDTH = 1120
 PREVIEW_COLUMN_COUNT = 4
 PREVIEW_GRID_GAP = 12
+PREVIEW_ITEMS_PER_PAGE = 200
 
 DETAIL_CANVAS_WIDTH = 1080
 
@@ -443,7 +444,7 @@ def _draw_statistics_summary(
     metrics = (
         ('图片总数', f'{total:,}'),
         ('图库数量', f'{gallery_count:,}'),
-        ('平均每库', f'{average:.1f}'),
+        ('平均图片数', f'{average:.1f}'),
     )
     for index, (label, value) in enumerate(metrics):
         top = 76 + index * 92
@@ -546,7 +547,7 @@ def _draw_statistics_summary(
     legend_width = max(1, width - legend_x)
     _draw_text(
         painter,
-        '数量占比 · 前 10 名',
+        '数量占比',
         legend_x,
         15,
         font=DEFAULT_BOLD_FONT,
@@ -1007,17 +1008,27 @@ async def _render_gallery_preview(
     gallery: str,
     aliases: Sequence[str],
     items: Sequence[GalleryPreviewItem],
+    *,
+    total_count: int | None = None,
+    page_number: int = 1,
+    page_count: int = 1,
+    format_sizes: Sequence[FormatSize] | None = None,
 ) -> Image.Image:
-    """将指定图库的全部缩略图渲染为一张自适应高度的长图。"""
+    """将指定图库的一页缩略图渲染为一张自适应高度的长图。"""
 
     prepared = await run_in_pool(
         _prepare_gallery_preview_items,
         tuple(items),
     )
-    format_sizes = _aggregate_format_sizes(tuple(
-        (item.format, item.path, item.size)
-        for item in items
-    ))
+    if format_sizes is None:
+        format_sizes = _aggregate_format_sizes(tuple(
+            (item.format, item.path, item.size)
+            for item in items
+        ))
+    total_count = len(items) if total_count is None else total_count
+    page_meta = f'{total_count:,} 张'
+    if page_count > 1:
+        page_meta += f' · 第 {page_number}/{page_count} 页'
     alias_text = ' / '.join(aliases)
     background = await resolve_configured_draw_background(
         config, theme=NSY_DRAW_THEME, logger=logger, label="图库预览"
@@ -1032,7 +1043,7 @@ async def _render_gallery_preview(
                 f'图库 · {gallery}',
                 width=PREVIEW_CONTENT_WIDTH,
                 eyebrow='NSY GALLERY',
-                meta=f'{len(items):,} 张',
+                meta=page_meta,
                 theme=NSY_DRAW_THEME,
             )
             if alias_text:
@@ -1216,12 +1227,24 @@ async def render_gallery_preview(
     items: Sequence[GalleryPreviewItem],
     *,
     group_id: int | str | None = None,
+    total_count: int | None = None,
+    page_number: int = 1,
+    page_count: int = 1,
+    format_sizes: Sequence[FormatSize] | None = None,
 ) -> Image.Image:
-    """按群级配置的主题绘制图库缩略预览。"""
+    """按群级配置的主题绘制一页图库缩略预览。"""
 
     token = _NSY_STYLE_CONTEXT.set(_resolve_nsy_style(group_id))
     try:
-        return await _render_gallery_preview(gallery, aliases, items)
+        return await _render_gallery_preview(
+            gallery,
+            aliases,
+            items,
+            total_count=total_count,
+            page_number=page_number,
+            page_count=page_count,
+            format_sizes=format_sizes,
+        )
     finally:
         _NSY_STYLE_CONTEXT.reset(token)
 
@@ -1404,15 +1427,30 @@ async def _(ctx: HandlerContext):
         items = _gallery_preview_items(manager, gallery)
         if not items:
             return await ctx.asend_reply_msg(f'图库“{gallery}”暂无图片')
-        report = await render_gallery_preview(
-            gallery,
-            manager.aliases_by_gallery.get(gallery, []),
-            items,
-            group_id=ctx.group_id,
-        )
-        return await ctx.asend_reply_msg(
-            await get_image_cq(report, low_quality=True)
-        )
+        page_count = math.ceil(len(items) / PREVIEW_ITEMS_PER_PAGE)
+        format_sizes = _aggregate_format_sizes(tuple(
+            (item.format, item.path, item.size)
+            for item in items
+        ))
+        image_cqs = []
+        for page_index in range(page_count):
+            start = page_index * PREVIEW_ITEMS_PER_PAGE
+            page_items = items[start:start + PREVIEW_ITEMS_PER_PAGE]
+            report = await render_gallery_preview(
+                gallery,
+                manager.aliases_by_gallery.get(gallery, []),
+                page_items,
+                group_id=ctx.group_id,
+                total_count=len(items),
+                page_number=page_index + 1,
+                page_count=page_count,
+                format_sizes=format_sizes,
+            )
+            try:
+                image_cqs.append(await get_image_cq(report, low_quality=True))
+            finally:
+                report.close()
+        return await ctx.asend_reply_msg(''.join(image_cqs))
 
     await ctx.block('nsy:gallery-query:all')
     report = await render_gallery_statistics(

@@ -12,9 +12,11 @@ from .tokenizer import GENERIC_WORDS, normalize_key, normalize_text
 
 logger = get_logger("Sta")
 dictionary_db = get_file_db("data/sta/llm_words.json", logger)
+group_id_db = get_file_db("data/sta/group_ids.json", logger)
 NSY_ALIASES_FILE = "data/nsy/aliases.json"
 
 DICTIONARY_VERSION = 1
+GROUP_ID_DICTIONARY_VERSION = 1
 MAX_DICTIONARY_WORDS = 2000
 MAX_EVIDENCE_KEYS = 20
 
@@ -106,6 +108,62 @@ def get_nsy_dictionary_words(
             add_word(alias)
 
     return sorted(words, key=lambda word: (normalize_key(word), word))
+
+
+def _normalize_group_id_words(
+    words: Iterable[object],
+    *,
+    stopwords: Sequence[str] = (),
+) -> list[str]:
+    """规范化群名片/昵称；内部空白折叠后仍可作为一个精确词典项。"""
+
+    stopped_keys = {normalize_key(word) for word in stopwords}
+    surfaces: set[str] = set()
+    for word in words:
+        surface = " ".join(normalize_text(str(word or "")).split())
+        key = normalize_key(surface)
+        if not key or key in stopped_keys or len(surface) > 64:
+            continue
+        surfaces.add(surface)
+    return sorted(surfaces, key=lambda word: (normalize_key(word), word))
+
+
+def get_group_id_dictionary_words(
+    group_id: int | str,
+    *,
+    stopwords: Sequence[str] = (),
+) -> list[str]:
+    """读取指定群最近一次成功同步的群内显示 ID。"""
+
+    groups = group_id_db.get_copy("groups", {})
+    if not isinstance(groups, dict):
+        return []
+    entry = groups.get(str(group_id), {})
+    raw_words = entry.get("ids", []) if isinstance(entry, dict) else entry
+    if not isinstance(raw_words, list):
+        return []
+    return _normalize_group_id_words(raw_words, stopwords=stopwords)
+
+
+def save_group_id_dictionary_words(
+    group_id: int | str,
+    words: Iterable[object],
+) -> list[str]:
+    """更新一个群的显示 ID，并立即持久化供本次分词读取。"""
+
+    normalized_words = _normalize_group_id_words(words)
+    groups = group_id_db.get_copy("groups", {})
+    if not isinstance(groups, dict):
+        groups = {}
+    groups[str(group_id)] = {
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+        "ids": normalized_words,
+    }
+    group_id_db.set("version", GROUP_ID_DICTIONARY_VERSION)
+    group_id_db.set("groups", groups)
+    # FileDB 可能配置为延迟落盘；群 ID 要在本次分词前真实写入 JSON。
+    group_id_db.save()
+    return normalized_words
 
 
 def record_llm_dictionary_words(

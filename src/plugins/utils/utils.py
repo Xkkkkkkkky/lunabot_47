@@ -1120,6 +1120,11 @@ async def download_and_convert_svg(svg_url: str) -> Image.Image:
 
 _MARKDOWN_CSS_PATH = Path("data/utils/m2i/m2i.css")
 
+from ..draw.apple_emoji import (
+    get_apple_emoji_asset_signature,
+    get_apple_emoji_data_uri,
+)
+
 
 def _get_markdown_background_image() -> str:
     return get_shared_draw_background_image()
@@ -1150,7 +1155,40 @@ def get_markdown_style_signature() -> str:
             parts.append(str(path.stat().st_mtime_ns))
     if _MARKDOWN_CSS_PATH.is_file():
         parts.append(str(_MARKDOWN_CSS_PATH.stat().st_mtime_ns))
+    parts.append(get_apple_emoji_asset_signature())
     return get_md5('|'.join(parts))
+
+
+def _replace_html_emojis(html: str) -> str:
+    import emoji
+    from bs4 import BeautifulSoup
+
+    document = BeautifulSoup(html, "html.parser")
+    for text_node in list(document.find_all(string=True)):
+        if text_node.parent and text_node.parent.name in {"script", "style"}:
+            continue
+        matches = emoji.emoji_list(str(text_node))
+        if not matches:
+            continue
+
+        nodes = []
+        cursor = 0
+        for match in matches:
+            nodes.append(str(text_node)[cursor:match["match_start"]])
+            characters = match["emoji"]
+            if data_uri := get_apple_emoji_data_uri(characters):
+                image = document.new_tag("img")
+                image["class"] = "apple-emoji"
+                image["src"] = data_uri
+                image["alt"] = characters
+                image["draggable"] = "false"
+                nodes.append(image)
+            else:
+                nodes.append(characters)
+            cursor = match["match_end"]
+        nodes.append(str(text_node)[cursor:])
+        text_node.replace_with(*nodes)
+    return str(document)
 
 
 async def markdown_to_image(markdown_text: str, width: int = 600) -> Image.Image:
@@ -1173,11 +1211,19 @@ async def markdown_to_image(markdown_text: str, width: int = 600) -> Image.Image
         try:
             import mistune
             md_renderer = mistune.create_markdown()
-            html = md_renderer(markdown_text)
+            html = _replace_html_emojis(md_renderer(markdown_text))
             full_html = f"""
 <html>
     <head><style>
         {css_content}
+        .markdown-body img.apple-emoji {{
+            display: inline-block;
+            width: 1.15em;
+            height: 1.15em;
+            margin: 0 0.04em;
+            vertical-align: -0.2em;
+            object-fit: contain;
+        }}
         .markdown-body {{
             padding: 32px;
             {background_css}

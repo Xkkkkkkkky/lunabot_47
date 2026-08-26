@@ -24,7 +24,12 @@ from .tokenizer import (
     get_smart_tokenizer,
     reset_smart_tokenizer,
 )
-from .word_dictionary import get_llm_dictionary_words, get_nsy_dictionary_words
+from .word_dictionary import (
+    get_group_id_dictionary_words,
+    get_llm_dictionary_words,
+    get_nsy_dictionary_words,
+    save_group_id_dictionary_words,
+)
 
 config = Config("sta")
 logger = get_logger("Sta")
@@ -845,10 +850,51 @@ last_nsy_dictionary_words = []
 jieba_inited = False
 
 
-def _get_dictionary_words(stopwords):
+def _get_dictionary_words(stopwords, group_id=None):
     llm_words = get_llm_dictionary_words(stopwords=stopwords)
     nsy_words = get_nsy_dictionary_words(stopwords=stopwords)
-    return llm_words, nsy_words, sorted(set(llm_words + nsy_words))
+    group_id_words = (
+        get_group_id_dictionary_words(group_id, stopwords=stopwords)
+        if group_id is not None
+        else []
+    )
+    return (
+        llm_words,
+        nsy_words,
+        group_id_words,
+        sorted(set(llm_words + nsy_words + group_id_words)),
+    )
+
+
+async def _refresh_group_id_dictionary(group_id) -> list[str]:
+    """读取当前群名片/昵称并落盘；失败时保留上次成功同步的数据。"""
+
+    cached_words = get_group_id_dictionary_words(group_id)
+    try:
+        bot = await aget_group_bot(group_id, raise_exc=False)
+        if bot is None:
+            raise RuntimeError("没有可用的群机器人")
+        members = await get_group_users(bot, int(group_id))
+        if not isinstance(members, list) or not members:
+            raise ValueError("群成员列表为空或格式无效")
+        display_ids = [
+            member.get("card") or member.get("nickname")
+            for member in members
+            if isinstance(member, dict)
+        ]
+        words = save_group_id_dictionary_words(group_id, display_ids)
+        logger.info(
+            f"STA群内ID词典已同步 group={group_id} "
+            f"成员数={len(members)} 词数={len(words)}"
+        )
+        return words
+    except Exception as exc:
+        logger.warning(
+            f"STA群内ID词典同步失败 group={group_id}，"
+            f"使用缓存词数={len(cached_words)}: {type(exc).__name__}: {exc}"
+        )
+        return cached_words
+
 
 # jieba重置（用户词典）
 def reset_jieba():
@@ -864,7 +910,12 @@ def reset_jieba():
     stopwords = [word.strip() for word in stopwords if word.strip() != ""]
     userwords = list(set(userwords))
     stopwords = list(set(stopwords))
-    llm_dictionary_words, nsy_dictionary_words, dictionary_words = _get_dictionary_words(stopwords)
+    (
+        llm_dictionary_words,
+        nsy_dictionary_words,
+        _,
+        dictionary_words,
+    ) = _get_dictionary_words(stopwords)
     dictionary_words = [
         word
         for word in dictionary_words
@@ -892,7 +943,9 @@ def reset_jieba():
 def init_jieba():
     global jieba_inited, last_llm_dictionary_words, last_nsy_dictionary_words
     stopwords = file_db.get("stopwords", [])
-    llm_dictionary_words, nsy_dictionary_words, _ = _get_dictionary_words(stopwords)
+    llm_dictionary_words, nsy_dictionary_words, _, _ = _get_dictionary_words(
+        stopwords
+    )
     if (
         not jieba_inited
         or llm_dictionary_words != last_llm_dictionary_words
@@ -1048,13 +1101,14 @@ def _build_smart_word_analysis(
 async def prepare_word_analysis(gid, date_str, recs) -> KeywordAnalysis | None:
     """在异步绘图入口准备智能词频，并按配置执行可选 LLM 复核。"""
 
+    await _refresh_group_id_dictionary(gid)
     if _get_word_tokenizer_mode() not in {"smart", "new"}:
         return None
 
     init_jieba()
     userwords = file_db.get("userwords", [])
     stopwords = file_db.get("stopwords", [])
-    _, _, dictionary_words = _get_dictionary_words(stopwords)
+    _, _, _, dictionary_words = _get_dictionary_words(stopwords, gid)
     statistical_filter = bool(
         config.get("word_tokenizer.statistical_filter", True, raise_exc=False)
     )
@@ -1146,7 +1200,12 @@ def draw_wordcloud(
 
     userwords = file_db.get("userwords", [])
     stopwords = file_db.get("stopwords", [])
-    _, nsy_dictionary_words, dictionary_words = _get_dictionary_words(stopwords)
+    (
+        _,
+        nsy_dictionary_words,
+        group_id_dictionary_words,
+        dictionary_words,
+    ) = _get_dictionary_words(stopwords, gid)
     tokenizer_mode = _get_word_tokenizer_mode()
     statistical_filter = bool(
         config.get("word_tokenizer.statistical_filter", True, raise_exc=False)
@@ -1162,7 +1221,12 @@ def draw_wordcloud(
                 dictionary_words=dictionary_words,
             )
         analysis = word_analysis
-        all_words = analysis.frequencies
+        # 统计权重只决定哪些词能进入最终结果；词云字号使用最直观的原始词频。
+        # LLM 归并后的 raw_counts 与 frequencies 使用同一组展示词键。
+        all_words = {
+            word: analysis.raw_counts[word]
+            for word in analysis.frequencies
+        }
         raw_word_counts = analysis.raw_counts
         word_user_count = analysis.user_counts
         logger.info(
@@ -1171,7 +1235,11 @@ def draw_wordcloud(
     else:
         if tokenizer_mode not in {"legacy", "old"}:
             logger.warning(f"未知分词模式 {tokenizer_mode}，回退到 legacy")
-        legacy_userwords = set(userwords) | set(nsy_dictionary_words)
+        legacy_userwords = (
+            set(userwords)
+            | set(nsy_dictionary_words)
+            | set(group_id_dictionary_words)
+        )
         legacy_stopwords = set(stopwords)
         legacy_tokenizer = get_smart_tokenizer(
             userwords=legacy_userwords,
@@ -1189,6 +1257,8 @@ def draw_wordcloud(
             nouns = []
             for candidate in legacy_tokenizer.tokenize(msg):
                 if candidate.forced:
+                    nouns.append(candidate.surface)
+                elif candidate.source == "punctuation":
                     nouns.append(candidate.surface)
                 elif candidate.pos.startswith('n') and len(candidate.key) > 1:
                     nouns.append(candidate.surface)
@@ -1295,16 +1365,23 @@ def draw_wordcloud(
         max_words=100,
         max_font_size=FONT_SIZE_MAX,
         min_font_size=FONT_SIZE_MIN,
-        # 保留明显字号差，同时避免绝对词频比过早把后续
-        # 成员色代表词压到最小字号以下而直接丢弃。
-        relative_scaling=0.65,
+        # 绘图权重已压缩过，均衡词频层次与画布填充率。
+        relative_scaling=0.5,
         random_state=42,
         color_func=frequency_word_color,
         mode='RGBA',
     )
 
+    # 对数压缩只用于绘图：保留原始数量的排序和同频关系，
+    # 同时放大长尾词，避免头部词频把大量展示词压到最小字号。
+    cloud_frequencies = {
+        word: 1.0 + math.log(float(frequency) / min_frequency)
+        for word, frequency in all_words.items()
+        if float(frequency) > 0
+    }
     # WordCloud 不接受空词频；占位词只参与绘图，不进入排行榜和用户统计。
-    cloud_frequencies = all_words or {"暂无可统计词汇": 1.0}
+    if not cloud_frequencies:
+        cloud_frequencies = {"暂无可统计词汇": 1.0}
     wc.generate_from_frequencies(cloud_frequencies)
     img = wc.to_image()
 

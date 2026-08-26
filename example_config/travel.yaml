@@ -1,0 +1,22 @@
+# Travel 群旅行位置打卡设置。
+timezone: "Asia/Shanghai"  # 打卡日期与查询“今天”的时区
+default_query_months: 1    # /查出勤 未填写月数时的范围
+max_query_months: 12       # 单次热力图最多查询的月数
+
+storage:
+  path: "data/travel/travel.sqlite"
+
+# 常见但不是 ISO 3166-1 正式代码的输入别名。
+country_aliases:
+  uk: "GB"
+
+# 可按部署需要加入额外的两位地区代码，例如 XK。
+extra_country_codes: []
+
+draw:
+  canvas_width: 1260
+  low_quality: false  # false 使用 PNG，保留小格与文字清晰度
+  # 留空时继承 .env 的 DRAW_BACKGROUND_IMAGE。
+  background_image: ""
+  # 留空时继承 global.draw.theme 与对应的 group_themes。
+  theme: {}

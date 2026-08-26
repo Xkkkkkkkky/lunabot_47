@@ -35,10 +35,20 @@ def _battle_options() -> BattleOptions:
 
 
 def _render_config() -> RenderConfig:
-    render_cfg = dict(config.get("render", {}))
-    if not render_cfg.get("font_path"):
-        render_cfg["font_path"] = global_config.get("font.path", "")
-    return RenderConfig.from_config(render_cfg)
+    return RenderConfig.from_config(dict(config.get("render", {})))
+
+
+async def _render_record(
+    record: BattleRecord,
+    group_id: int | str | None = None,
+):
+    return await render_battle_report(
+        record,
+        _render_config(),
+        module_config=config,
+        group_id=group_id,
+        logger=logger,
+    )
 
 
 def _storage_keep_battles() -> int:
@@ -75,17 +85,20 @@ def get_latest_record_for_query(use_active: bool = True) -> BattleRecord | None:
 async def _handle_ws_event(event: dict[str, Any]) -> None:
     global _last_ws_event_at
     _last_ws_event_at = datetime.now()
-    get_storage().append_raw_event(event)
     record = get_recorder().ingest(event)
     if record:
         await _archive_and_notify(record)
 
 
 async def _archive_and_notify(record: BattleRecord) -> None:
-    path = get_storage().save_battle(record, keep_battles=_storage_keep_battles())
+    raw_path, log_path = get_storage().save_battle(
+        record,
+        keep_battles=_storage_keep_battles(),
+    )
     logger.info(
         f"保存 GBFR 战斗记录 {record.battle_id}: "
-        f"{record.total_damage} damage, {record.duration_seconds:.1f}s -> {path}"
+        f"{record.total_damage} damage, {record.duration_seconds:.1f}s "
+        f"-> raw={raw_path}, log={log_path}"
     )
     if not config.get("subscribe.auto_send", True):
         return
@@ -102,19 +115,20 @@ async def _send_record_to_subscribers(record: BattleRecord) -> None:
         await asyncio.sleep(delay)
 
     render_cfg = _render_config()
-    img = await run_in_pool(render_battle_report, record, render_cfg)
-    img_cq = await get_image_cq(
-        img,
-        logger=logger,
-        low_quality=bool(config.get("render.low_quality", True)),
-    )
     text = "【GBFR 战斗结束】\n" + battle_summary_text(
         record,
         show_username=render_cfg.show_username,
     )
-    msg = f"{text}\n{img_cq}"
     for group_id in group_ids:
         try:
+            # 与 STA/NSY 一致，按群解析主题和背景，因此需要逐群渲染。
+            img = await _render_record(record, group_id)
+            img_cq = await get_image_cq(
+                img,
+                logger=logger,
+                low_quality=bool(config.get("render.low_quality", True)),
+            )
+            msg = f"{text}\n{img_cq}"
             await send_group_msg_by_bot(group_id, msg)
         except Exception as e:
             logger.print_exc(f"向群 {group_id} 推送 GBFR 输出报告失败: {get_exc_desc(e)}")
@@ -166,8 +180,9 @@ async def _gbfr_ws_worker():
 async def _finish_idle_battle():
     if not config.get("websocket.enable", True):
         return
-    idle_seconds = int(config.get("battle.idle_finish_seconds", 120))
-    record = get_recorder().finish_if_idle(
+    recorder = get_recorder()
+    idle_seconds = recorder.options.idle_finish_seconds
+    record = recorder.finish_if_idle(
         int(datetime.now().timestamp() * 1000),
         idle_seconds * 1000,
     )
@@ -191,10 +206,9 @@ async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().lower()
     use_active = args not in {"last", "latest", "最近归档", "归档"}
     record = get_latest_record_for_query(use_active=use_active)
-    assert_and_reply(record, "暂无 GBFR 战斗记录，请先运行 Windows 上的 GBFR ACT 并完成一次战斗")
+    assert_and_reply(record, "暂无 GBFR 战斗记录，请先运行 GBFR ACT 并完成一次战斗")
     await ctx.block("gbfr_act_render", timeout=120, err_msg="正在生成 GBFR 输出图，请稍后再试")
-    render_cfg = _render_config()
-    img = await run_in_pool(render_battle_report, record, render_cfg)
+    img = await _render_record(record, ctx.group_id)
     return await ctx.asend_reply_msg(
         await get_image_cq(
             img,

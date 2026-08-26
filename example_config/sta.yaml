@@ -25,7 +25,8 @@ word_tokenizer:
   llm:
     # 仅复核本地候选，不会把任意新词写入结果；失败时自动回退本地统计。
     enabled: false  # 开启后每个未命中缓存的统计任务会额外调用一次 LLM
-    model: "ds:deepseek-v4-flash" # provider_code:model_name，须存在于 LLM provider 配置
+    # model 同时用于 /sta user 锐评；enabled 只控制词云候选词复核。
+    model: "ds:deepseek-v4-flash-vision-exp" # provider_code:model_name，须存在于 LLM provider 配置
     candidate_limit: 80  # 单次最多发送给 LLM 的候选词数，最小按 1 处理
     contexts_per_word: 1 # 每词上下文数；链接、邮箱和 5 位以上数字会脱敏，0 表示不附带
     supplemental_ratio: 0.35 # 候选名额中预留给“本地已软过滤词”的比例，限制到 0～1

@@ -6,6 +6,7 @@ from .draw import (
     render_word_count_report,
     reset_jieba,
 )
+from .user import get_user_statistic, parse_user_query
 from ..record.sql import query_msg_by_range, query_msg_count
 
 
@@ -247,6 +248,28 @@ async def _extract_sta_target_group(ctx, args, valid_args):
 
 
 # ------------------------------------------------ 聊天逻辑 ------------------------------------------------
+
+
+# 分析指定用户的发言规律与用语习惯
+sta_user = CmdHandler(["/sta user"], logger)
+sta_user.check_cdrate(cd).check_wblist(gwl).check_group()
+@sta_user.handle()
+async def _(ctx: HandlerContext):
+    try:
+        query = parse_user_query(
+            ctx.get_args().strip().split(),
+            [
+                user_id
+                for user_id in ctx.get_at_qids()
+                if int(user_id) != int(ctx.bot.self_id)
+            ],
+            ctx.user_id,
+            check_superuser(ctx.event),
+        )
+    except ValueError as exc:
+        assert_and_reply(False, str(exc))
+    res = await get_user_statistic(ctx.group_id, query.user_id, query.days)
+    return await ctx.asend_reply_msg(res)
 
 
 # 发送每日统计图

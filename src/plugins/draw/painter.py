@@ -9,7 +9,6 @@ from copy import deepcopy
 import math
 from pilmoji import Pilmoji
 from pilmoji import getsize as getsize_emoji
-from pilmoji.source import GoogleEmojiSource
 import emoji
 from datetime import datetime, timedelta
 import asyncio
@@ -25,6 +24,7 @@ import struct
 
 from ..common.config import *
 from ..common.process_pool import *
+from .apple_emoji import LOCAL_APPLE_EMOJI_SOURCE
 from .img_utils import adjust_image_alpha_inplace
 
 
@@ -669,7 +669,7 @@ class Painter:
             pos = (pos[0] - text_offset[0] + self.offset[0], pos[1] - text_offset[1] + self.offset[1])
             draw.text(pos, text, font=font, fill=fill, align=align, anchor='ls')
         else:
-            with Pilmoji(self.img, source=GoogleEmojiSource) as pilmoji:
+            with Pilmoji(self.img, source=LOCAL_APPLE_EMOJI_SOURCE) as pilmoji:
                 text_offset = (0, -std_size[1])
                 configured_offset = global_config.get('painter.emoji.offset')
                 scale = global_config.get('painter.emoji.scale')
@@ -1688,4 +1688,3 @@ class Painter:
 
 if PAINTER_PROCESS_NUM > 0 and is_main_process():
     _painter_pool: ProcessPool = ProcessPool(PAINTER_PROCESS_NUM, name='draw')
-

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +11,8 @@ class GbfrStorage:
     """
     GBFR ACT 本地持久化。
 
-    raw 目录保存完整 WebSocket 事件流，logs 目录保存按战斗切分后的可重建记录。
+    战斗期间的 WebSocket 事件由 BattleRecorder 在内存中按场缓冲。
+    战斗结束后，raw 目录一次性保存原始事件流，logs 目录保存转换后的可重建记录。
     查询和渲染优先读取 logs，避免依赖 bot 当前内存状态。
     """
 
@@ -27,29 +27,38 @@ class GbfrStorage:
         self.raw_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-    def append_raw_event(self, event: dict[str, Any]) -> Path:
-        self.ensure_dirs()
-        time_ms = int(event.get("time_ms") or datetime.now().timestamp() * 1000)
-        day = datetime.fromtimestamp(time_ms / 1000).strftime("%Y-%m-%d")
-        path = self.raw_dir / f"{day}.jsonl"
-        with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
-        return path
+    def save_battle(
+        self,
+        record: BattleRecord,
+        keep_battles: int = 100,
+    ) -> tuple[Path, Path]:
+        """将内存中的整场战斗一次性写入 raw 和 logs。"""
 
-    def save_battle(self, record: BattleRecord, keep_battles: int = 100) -> Path:
         self.ensure_dirs()
         file_name = f"{record.start_time.strftime('%Y%m%d_%H%M%S')}_{record.battle_id}.json"
-        path = self.log_dir / file_name
+        raw_path = self.raw_dir / f"{Path(file_name).stem}.jsonl"
+        log_path = self.log_dir / file_name
+
+        raw_data = "\n".join(
+            json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+            for event in record.events
+        )
+        if raw_data:
+            raw_data += "\n"
+        raw_tmp_path = raw_path.with_suffix(".jsonl.tmp")
+        raw_tmp_path.write_text(raw_data, encoding="utf-8")
+        raw_tmp_path.replace(raw_path)
+
         data = record.to_dict()
-        data["source_path"] = str(path)
-        tmp_path = path.with_suffix(".json.tmp")
+        data["source_path"] = str(log_path)
+        tmp_path = log_path.with_suffix(".json.tmp")
         tmp_path.write_text(
             json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        tmp_path.replace(path)
-        self._update_index(path, record, keep_battles)
-        return path
+        tmp_path.replace(log_path)
+        self._update_index(log_path, record, keep_battles)
+        return raw_path, log_path
 
     def latest_battle(self, options: BattleOptions | None = None) -> BattleRecord | None:
         for item in reversed(self._read_index()):

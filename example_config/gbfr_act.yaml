@@ -1,7 +1,7 @@
 # GBFR 并非默认必需服务；未运行 GBFR ACT 时应关闭，避免反复连接不存在的 WebSocket。
 battle:
   idle_check_interval_seconds: 15
-  idle_finish_seconds: 120
+  idle_finish_seconds: 120              # 最后一次伤害后等待此时间，然后批量写入 raw/logs
   min_damage: 0
   ignore_non_party_sources: true
   ignored_target_type_ids: []
@@ -21,14 +21,15 @@ subscribe:
   auto_send: true
   auto_send_delay_seconds: 1
 
+# 与 STA/NSY 共用全局绘图主题；留空时继承 global.draw 配置。
+draw:
+  background_image: ""
+  theme: {}
+
 render:
   width: 1280
-  background: ""
-  background_color: "#182029"
   chart_bucket_seconds: 2
   top_actor_count: 4
   top_action_count: 5
   show_username: true
-  font_path: ""                         # 留空时继承 global.font.path
   low_quality: true
-
