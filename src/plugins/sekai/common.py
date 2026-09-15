@@ -58,6 +58,21 @@ def _get_enabled_server_regions() -> List[str]:
 ENABLED_SERVER_REGIONS = _get_enabled_server_regions()
 DEFAULT_SERVER_REGION = ENABLED_SERVER_REGIONS[0]
 
+# 火罐倍率同时用于组卡和活动 PT 控分。
+BOOST_BONUS_DICT: Dict[int, int] = {
+    0: 1,
+    1: 5,
+    2: 10,
+    3: 15,
+    4: 20,
+    5: 25,
+    6: 27,
+    7: 29,
+    8: 31,
+    9: 33,
+    10: 35,
+}
+
 
 def filter_enabled_server_regions(regions: List[str]) -> List[str]:
     return [region for region in regions if region in ENABLED_SERVER_REGIONS]
@@ -192,7 +207,7 @@ MUSIC_TAG_UNIT_MAP = {
     'other': None,
 }
 
-STORYSUMMARY_WATERMARK = " [LunaBot生成-请勿转载] "
+STORYSUMMARY_WATERMARK = " [LunaBot_47生成-请勿转载] "
 
 
 # ======================= 通用功能 ======================= #

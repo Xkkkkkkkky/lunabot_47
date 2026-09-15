@@ -1,10 +1,9 @@
 from ...utils import *
-from ...llm import get_text_retriever
 from ..common import *
 from ..handler import *
 from ..asset import *
 from ..draw import *
-from ..sub import SekaiUserSubHelper, SekaiGroupSubHelper
+from ..gameapi import get_gameapi_config, request_gameapi
 from .profile import (
     get_detailed_profile, 
     get_detailed_profile_card, 
@@ -14,6 +13,9 @@ from .profile import (
     get_basic_profile,
     get_basic_profile_card,
     get_player_bind_id,
+    check_uid_in_blacklist,
+    get_avatar_widget_with_frame,
+    process_hide_uid,
 )
 from .event import extract_ban_event
 from .resbox import get_res_icon
@@ -21,15 +23,16 @@ import rapidfuzz
 import pandas as pd
 
 
-music_group_sub = SekaiGroupSubHelper("music", "新曲通知", ENABLED_SERVER_REGIONS)
-music_user_sub = SekaiUserSubHelper("music", "新曲@提醒", ENABLED_SERVER_REGIONS, related_group_sub=music_group_sub)
-apd_group_sub = SekaiGroupSubHelper("apd", "新APD通知", ENABLED_SERVER_REGIONS)
-apd_user_sub = SekaiUserSubHelper("apd", "新APD@提醒", ENABLED_SERVER_REGIONS, related_group_sub=apd_group_sub)
-
-music_name_retriever = get_text_retriever(f"music_name") 
-
-music_cn_titles = WebJsonRes("曲名中文翻译", "https://i18n-json.sekai.best/zh-CN/music_titles.json", update_interval=timedelta(days=1))
-music_en_titles = WebJsonRes("曲名英文翻译", "https://i18n-json.sekai.best/en/music_titles.json", update_interval=timedelta(days=1))
+music_cn_titles = WebJsonRes(
+    "曲名中文翻译",
+    config.get("music.cn_titles_url"),
+    update_interval=timedelta(days=1),
+)
+music_en_titles = WebJsonRes(
+    "曲名英文翻译",
+    config.get("music.en_titles_url"),
+    update_interval=timedelta(days=1),
+)
 
 musicmetas_json = WebJsonRes(
     name="MusicMeta", 
@@ -353,11 +356,9 @@ class MusicSearchOptions:
     use_title: bool = True
     use_alias: bool = True
     use_distance: bool = True
-    use_emb: bool = True
     use_event_id: bool = True
     use_ban_event: bool = True
     max_num: int = 4
-    search_num: int = None
     diff: str = None
     raise_when_err: bool = True
     distance_sim_threshold: float = 0.7
@@ -576,38 +577,14 @@ async def search_music(ctx: SekaiHandlerContext, query: str, options: MusicSearc
         if options.debug:
             log(f"子串/编辑距离匹配耗时: {time.time() - start_time:.4f}s")
         
-    # 语义匹配
-    if not search_type and options.use_emb:
-        start_time = time.time()
-        search_type = "emb"
-        if not query:
-            err_msg = "搜索文本为空"
-        else:
-            if not options.search_num:
-                search_num = options.max_num * 5
-            log(f"搜索曲名: {query}")
-            res, scores = await query_music_by_emb(ctx, query, search_num)
-            res = deepcopy(res)
-            for m, s in zip(res, scores):
-                # 把 0 到 无穷的距离映射到 0 到 1 的相似度 
-                m['sim'] = max(m.get('sim', 0), math.exp(-s))
-            res = unique_by(res, "id")
-            res = [m for m in res if diff is None or (await check_music_has_diff(ctx, int(m['id']), diff))]
-            res = res[:options.max_num]
-            if len(res) == 0:
-                err_msg = f"没有找到相关{region_name}歌曲"
-            sims = [m['sim'] for m in res]
-            ret_musics.extend(res)
-        if options.debug:
-            log(f"语义匹配耗时: {time.time() - start_time:.4f}s")
-                    
+    if not search_type and not err_msg:
+        err_msg = f"没有找到相关{region_name}歌曲"
+
     music = ret_musics[0] if len(ret_musics) > 0 else None
     candidates = ret_musics[1:] if len(ret_musics) > 1 else []
     if music and sims:
         sim_type = ""
-        if search_type == "emb":
-            sim_type = "语义"
-        elif search_type == "distance":
+        if search_type == "distance":
             sim_type = "文本"
         candidate_msg += f"{sim_type}相似度{sims[0]:.2f}" 
     if candidates:
@@ -940,29 +917,6 @@ async def get_music_trans_title(mid: int, lang: str, default: str=None) -> str:
         return (await music_en_titles.get()).get(str(mid), default)
     raise Exception(f"不支持的语言: {lang}")
 
-# 更新曲名语义库
-async def update_music_name_embs(ctx: SekaiHandlerContext):
-    try:
-        await ctx.block_region()
-        region = ctx.region
-        musics = await ctx.md.musics.get()
-        update_list: List[Tuple[str, str]] = []
-        for music in musics:
-            mid = music['id']
-            title = music['title']
-            pron = music['pronunciation']
-            update_list.append((f"{mid} {region} title", title))
-            update_list.append((f"{mid} {region} pron", pron))
-            if cn_title := await get_music_trans_title(mid, 'cn'):
-                update_list.append((f"{mid} cn_trans title", cn_title))
-            if en_title := await get_music_trans_title(mid, 'en'):
-                update_list.append((f"{mid} en_trans title", en_title))
-        keys = [item[0] for item in update_list]
-        texts = [item[1] for item in update_list]
-        await music_name_retriever.batch_update_embs(keys, texts, skip_exist=True)
-    except Exception as e:
-        logger.print_exc(f"更新曲名语义库失败")
-
 # 从字符串中获取难度 返回(难度名, 去掉难度后缀的字符串)
 def extract_diff(text: str, default: str="master") -> Tuple[str, str]:
     all_names = []
@@ -997,19 +951,6 @@ async def check_music_has_diff(ctx: SekaiHandlerContext, mid: int, diff: str) ->
     diff_info = await get_music_diff_info(ctx, mid)
     return diff in diff_info.level
 
-# 根据曲名语义查询歌曲 返回歌曲列表和相似度
-async def query_music_by_emb(ctx: SekaiHandlerContext, text: str, limit: int=5):
-    await update_music_name_embs(ctx)
-    def filter(key: str):
-        _, t, _ = key.split()
-        return t in ['cn_trans', 'en_trans', ctx.region]
-    query_result = await music_name_retriever.find(text, limit, filter=filter)
-    ids = [int(item[0].split()[0]) for item in query_result]
-    result_musics = await ctx.md.musics.collect_by_ids(ids)
-    scores = [item[1] for item in query_result]
-    logger.info(f"曲名语义嵌入查询结果: {[(r['id'], r['title'], s) for r, s in zip(result_musics, scores)]}")
-    return result_musics, scores
-
 # 获取活动歌曲 不存在返回None
 async def get_music_of_event(ctx: SekaiHandlerContext, event_id: int) -> Dict:
     assert_and_reply(await ctx.md.events.find_by_id(event_id), f"活动ID={event_id}不存在")
@@ -1036,7 +977,9 @@ async def compose_music_detail_image(ctx: SekaiHandlerContext, mid: int, title: 
     composer        = music["composer"]
     lyricist        = music["lyricist"]
     arranger        = music["arranger"]
-    mv_info         = music['categories']
+    # 当前主数据将 MV 类别拆为独立表，以 musicId 关联歌曲。
+    mv_info = [item['musicCategoryName'] for item in
+               await ctx.md.music_categories.find_by('musicId', mid, mode='all')]
     publish_time    = datetime.fromtimestamp(music['publishedAt'] / 1000).strftime('%Y-%m-%d %H:%M:%S')
 
     if music['isFullLength']:
@@ -1839,13 +1782,99 @@ async def get_chart_bpm(ctx: SekaiHandlerContext, mid: int, timeout: float=5.0):
         duration=duration,
     )
 
-# 合成best30图片
-async def compose_best30_image(ctx: SekaiHandlerContext, qid: int) -> Image.Image:
-    profile, err_msg = await get_detailed_profile(
-        ctx, qid, 
-        filter=get_detailed_profile_card_filter('userMusicResults'),
-        raise_exc=True,
+# B30 必需成绩字段，其余 Suite 字段用于展示玩家素材；不查询游戏 Profile。
+async def get_best30_suite(ctx: SekaiHandlerContext, qid: int, uid: str | None) -> dict:
+    help_text = (
+        "无法获取可用的 Suite 成绩数据。请检查：\n"
+        "1. UID 和查询区服是否正确；\n"
+        "2. 是否已在 Haruki 工具箱绑定、验证账号并上传 Suite；\n"
+        "3. 是否已开启 Suite 公共 API 访问权限，且公开数据包含 userMusicResults。"
     )
+    if uid is None:
+        suite, _ = await get_detailed_profile(
+            ctx, qid, raise_exc=True, strict=False,
+        )
+    else:
+        assert_and_reply(re.fullmatch(r'[0-9]{13,20}', uid), 'UID 格式错误，请输入 13～20 位数字游戏 UID')
+        assert_and_reply(not check_uid_in_blacklist(uid), '该游戏 ID 已被拉入黑名单')
+        url = get_gameapi_config(ctx).suite_api_url
+        assert_and_reply(url, '该区服尚未配置公开 Suite 接口，请联系部署者')
+        try:
+            # 使用已有按区服配置的接口，公共请求不携带游戏 API 令牌。
+            suite = await request_gameapi(url.format(uid=uid))
+        except HttpError as exc:
+            if exc.status_code in (400, 401, 403, 404, 422):
+                raise ReplyException(help_text) from None
+            raise ReplyException('Haruki Suite 服务暂时不可用，请稍后重试') from None
+        except Exception:
+            raise ReplyException('Haruki Suite 请求失败或超时，请稍后重试；也请检查 UID、公共 API 权限和 Suite 上传情况') from None
+
+    assert_and_reply(isinstance(suite, dict) and isinstance(suite.get('userMusicResults'), list), help_text)
+    assert_and_reply(all(
+        isinstance(item, dict) and isinstance(item.get('musicId'), int)
+        and (item.get('musicDifficultyType') or item.get('musicDifficulty')) in DIFF_COLORS
+        for item in suite['userMusicResults']
+    ), 'Suite 成绩数据格式不完整，请重新上传 Suite 后重试')
+    return suite
+
+
+async def get_best30_identity_widget(
+    ctx: SekaiHandlerContext,
+    qid: int,
+    suite: dict,
+    width: int,
+    theme,
+    direct_uid: bool = False,
+) -> Widget:
+    """绘制 B30 身份栏；显式 UID 查询使用发起查询者的 QQ 信息。"""
+    if direct_uid:
+        # 直接用 UID 查询时没有可靠的游戏 Profile，身份栏只展示发起查询的 QQ 信息。
+        display_name = getattr(ctx.event.sender, 'nickname', None) or f'QQ {qid}'
+        avatar = None
+        try:
+            avatar = await download_avatar(ctx.bot, qid, circle=True)
+        except Exception:
+            logger.warning('B30 查询 QQ 头像不可用，继续展示 QQ 名称和成绩')
+        detail = f"{get_region_name(ctx.region)} · Suite数据"
+    else:
+        game_data = suite.get('userGamedata') or {}
+        avatar = None
+        if game_data.get('deck') and suite.get('userDecks') and suite.get('userCards'):
+            try:
+                avatar = await get_player_avatar_info_by_detailed_profile(ctx, suite)
+            except Exception:
+                logger.warning('B30 玩家头像素材不可用，继续展示成绩')
+        display_name = str(game_data.get('name') or f'查询 QQ：{qid}')
+        detail = f"{get_region_name(ctx.region)} · Suite数据"
+        player_id = game_data.get('userId')
+        if player_id:
+            detail += f"\nID：{process_hide_uid(ctx, player_id, keep=6)}"
+
+    with report_card(width, padding=20, theme=theme) as card:
+        with HSplit().set_w(width - 40).set_sep(16).set_item_align('c'):
+            if direct_uid:
+                if avatar:
+                    ImageBox(avatar, size=(80, 80), image_size_mode='fill', use_alphablend=True)
+            elif avatar:
+                await get_avatar_widget_with_frame(ctx, avatar.img, 80, suite.get('userPlayerFrames', []))
+            text_width = width - 40 - (96 if avatar else 0)
+            with VSplit().set_w(text_width).set_sep(6).set_content_and_item_align('l'):
+                TextBox(
+                    display_name,
+                    themed_text_style('heading', size=22, theme=theme), line_count=2,
+                ).set_w(text_width).set_padding(0)
+                TextBox(detail, themed_text_style('secondary', size=14, theme=theme), use_real_line_count=True).set_w(text_width).set_padding(0)
+                upload_time = suite.get('upload_time')
+                if isinstance(upload_time, (int, float)) and upload_time > 0:
+                    updated = datetime.fromtimestamp(upload_time / 1000).strftime('%m-%d %H:%M')
+                    TextBox(f"更新：{updated}", themed_text_style('muted', size=13, theme=theme)).set_padding(0)
+                TextBox(f"查询 QQ：{qid}", themed_text_style('muted', size=13, theme=theme)).set_w(text_width).set_padding(0)
+    return card
+
+
+# 合成best30图片
+async def compose_best30_image(ctx: SekaiHandlerContext, qid: int, uid: str | None = None) -> Image.Image:
+    suite = await get_best30_suite(ctx, qid, uid)
 
     # 数据获取
     with ProfileTimer('b30.get_data'):
@@ -1854,7 +1883,7 @@ async def compose_best30_image(ctx: SekaiHandlerContext, qid: int) -> Image.Imag
 
         music_diff_infos: dict[int, MusicDiffInfo] = {}
         music_results: dict[tuple[int, str], list] = {}
-        for result in profile.get('userMusicResults', []):
+        for result in suite['userMusicResults']:
             mid = result['musicId']
             diff = result.get('musicDifficultyType') or result.get('musicDifficulty')
             music_results.setdefault((mid, diff), []).append(result)
@@ -1872,9 +1901,9 @@ async def compose_best30_image(ctx: SekaiHandlerContext, qid: int) -> Image.Imag
             if results:
                 has_clear, full_combo, all_prefect = False, False, False
                 for item in results:
-                    has_clear = has_clear or item["playResult"] != 'not_clear'
-                    full_combo = full_combo or item["fullComboFlg"]
-                    all_prefect = all_prefect or item["fullPerfectFlg"]
+                    has_clear = has_clear or item.get("playResult", 'not_clear') != 'not_clear'
+                    full_combo = full_combo or item.get("fullComboFlg", False)
+                    all_prefect = all_prefect or item.get("fullPerfectFlg", False)
                 result_type = "clear" if has_clear else "not_clear"
                 if full_combo: result_type = "fc"
                 if all_prefect: result_type = "ap"
@@ -1899,38 +1928,195 @@ async def compose_best30_image(ctx: SekaiHandlerContext, qid: int) -> Image.Imag
     for cr, cover in zip(constant_results, music_covers):
         cr['cover'] = cover
     
-    # 绘图
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
-        with VSplit().set_content_align('c').set_item_align('c').set_sep(16):
-            with HSplit().set_content_align('l').set_item_align('l').set_sep(16).set_item_bg(roundrect_bg()):
-                (await get_detailed_profile_card(ctx, profile, err_msg)).set_bg(None)
-                with VSplit().set_content_align('l').set_item_align('l').set_sep(8).set_padding(16):
-                    shadow_color = LinearGradient(PLAY_RESULT_COLORS['ap'], PLAY_RESULT_COLORS['fc'], (0, 0), (1, 1))
-                    style = TextStyle(DEFAULT_BOLD_FONT, 24, BLACK, use_shadow=True, shadow_color=shadow_color, shadow_offset=3)
-                    TextBox(f"Rating", style)
-                    TextBox(f"{user_rating:.2f}", style.replace(size=48))
-                get_music_constants_info_widget(additional_text="计算方式: 33及以上FC-1，以下-1.5，AP±0").set_bg(None)
+    # 采用统一报告画布，但保留原 B30 的素材、信息层级和三列成绩卡片。
+    report_theme = resolve_draw_theme(config, group_id=getattr(ctx, 'group_id', None))
+    canvas_width = 1380
+    canvas_padding = 30
+    content_width = canvas_width - canvas_padding * 2
+    column_gap = 18
+    card_width = (content_width - column_gap * 2) // 3
+    header_gap = 18
+    identity_width = 440
+    rating_width = 200
+    constants_width = content_width - identity_width - rating_width - header_gap * 2
+    cover_size = 92
+    background = await resolve_configured_draw_background(
+        config, theme=report_theme, logger=logger, label="B30",
+    )
 
-            with Grid(col_count=3, hsep=16, vsep=16).set_item_bg(roundrect_bg()).set_content_align('lt').set_content_align('lt'):
-                for cr in constant_results:
-                    diff_color = DIFF_COLORS[cr['diff']]
-                    with HSplit().set_content_align('l').set_item_align('l').set_sep(16).set_padding((24, 20)):
-                        with Frame().set_content_align('lt'):
-                            ImageBox(cr['cover'], size=(80, 80), shadow=True)
-                            TextBox(str(cr['level']), TextStyle(DEFAULT_BOLD_FONT, 18, WHITE), overflow='clip') \
-                                .set_bg(roundrect_bg(fill=diff_color, radius=16)).set_offset((-16, -16)).set_content_align('c').set_size((32, 32))
+    with create_report_canvas(
+        background=background,
+        width=canvas_width,
+        padding=canvas_padding,
+        theme=report_theme,
+    ) as canvas:
+        with create_report_column(content_width, gap=column_gap, theme=report_theme):
+            # 顶部沿用原版的“玩家信息 / Rating / 定数说明”三段式布局。
+            with HSplit().set_w(content_width).set_sep(header_gap).set_item_align('t'):
+                # 该控件只消费 Suite 中可用的身份字段，显式 UID 查询不依赖 Profile。
+                await get_best30_identity_widget(
+                    ctx,
+                    qid,
+                    suite,
+                    identity_width,
+                    report_theme,
+                    direct_uid=uid is not None,
+                )
 
-                        with VSplit().set_content_align('l').set_item_align('l').set_sep(8):
-                            TextBox(f"{cr['title']}", TextStyle(DEFAULT_BOLD_FONT, 24, BLACK)).set_w(230)
-                            with HSplit().set_content_align('l').set_item_align('l').set_sep(8):
-                                TextBox(cr['constant_text'], TextStyle(DEFAULT_BOLD_FONT, 24, WHITE)) \
-                                    .set_bg(roundrect_bg(fill=diff_color, radius=4)).set_padding(6)
-                                TextBox(f"→", TextStyle(DEFAULT_BOLD_FONT, 32, BLACK))
-                                TextBox(f"{cr['rating']:.1f}", TextStyle(DEFAULT_BOLD_FONT, 24, BLACK, 
-                                                                         use_shadow=True, shadow_color=PLAY_RESULT_COLORS[cr['result_type']], shadow_offset=2))
-                            play_result_img_path = "fc_text.png" if cr['result_type'] == 'fc' else "ap_text.png"
-                            ImageBox(ctx.static_imgs.get(play_result_img_path), size=(None, 20), use_alphablend=True, shadow=True).set_padding((0, 2))
-   
+                with report_card(
+                    rating_width,
+                    padding=(16, 14),
+                    compact=True,
+                    theme=report_theme,
+                ):
+                    with VSplit().set_w(rating_width - 32).set_sep(2).set_content_and_item_align('l'):
+                        shadow_color = LinearGradient(
+                            PLAY_RESULT_COLORS['ap'],
+                            PLAY_RESULT_COLORS['fc'],
+                            (0, 0),
+                            (1, 1),
+                        )
+                        rating_style = TextStyle(
+                            DEFAULT_BOLD_FONT,
+                            24,
+                            report_theme.text_primary,
+                            use_shadow=True,
+                            shadow_color=shadow_color,
+                            shadow_offset=3,
+                        )
+                        TextBox("Rating", rating_style).set_padding(0)
+                        TextBox(
+                            f"{user_rating:.2f}",
+                            rating_style.replace(size=48),
+                        ).set_padding(0)
+
+                with report_card(
+                    constants_width,
+                    padding=(16, 14),
+                    compact=True,
+                    theme=report_theme,
+                ):
+                    constants_info = get_music_constants_info_widget(
+                        font_size=18,
+                        padding=0,
+                        additional_text=(
+                            "计算方式: 33及以上FC-1，以下-1.5，AP±0"
+                        ),
+                    )
+                    constants_info.set_bg(None).set_w(constants_width - 32).set_padding(0)
+
+            if constant_results:
+                with Grid(
+                    col_count=3,
+                    hsep=column_gap,
+                    vsep=column_gap,
+                ).set_content_and_item_align('lt'):
+                    for rank, cr in enumerate(constant_results, start=1):
+                        diff = cr['diff']
+                        diff_color = DIFF_COLORS[diff]
+                        cover = cr.get('cover')
+                        inner_width = card_width - 32
+                        text_width = inner_width - cover_size - 14
+                        with report_card(
+                            card_width,
+                            padding=(16, 14),
+                            compact=True,
+                            theme=report_theme,
+                        ):
+                            with HSplit().set_w(inner_width).set_sep(14).set_item_align('t'):
+                                with Frame().set_size((cover_size, cover_size)).set_content_align('lt').set_allow_draw_outside(True):
+                                    if cover is not None:
+                                        # fit 模式保留整张方形曲绘，不再使用中心裁切。
+                                        ImageBox(
+                                            cover,
+                                            size=(cover_size, cover_size),
+                                            image_size_mode='fit',
+                                            use_alphablend=True,
+                                            shadow=True,
+                                        )
+                                    else:
+                                        report_image_placeholder(
+                                            size=(cover_size, cover_size),
+                                            text="无封面",
+                                            theme=report_theme,
+                                        )
+                                    TextBox(
+                                        str(cr['level']),
+                                        themed_text_style("badge", size=14, theme=report_theme),
+                                        overflow='clip',
+                                    ).set_bg(
+                                        roundrect_bg(fill=diff_color, radius=999)
+                                    ).set_padding(0).set_size((36, 36)).set_content_align('c').set_offset((-8, -8))
+
+                                with VSplit().set_w(text_width).set_sep(5).set_content_and_item_align('l'):
+                                    TextBox(
+                                        f"#{rank:02d}",
+                                        themed_text_style("muted", size=12, theme=report_theme),
+                                        overflow='clip',
+                                    ).set_padding(0)
+                                    TextBox(
+                                        cr['title'],
+                                        themed_text_style("heading", size=20, theme=report_theme),
+                                        line_count=2,
+                                    ).set_w(text_width).set_padding(0)
+                                    with HSplit().set_content_align('l').set_item_align('c').set_sep(7):
+                                        TextBox(
+                                            f"{diff.upper()} {cr['constant_text']}",
+                                            themed_text_style("badge", size=14, theme=report_theme),
+                                            overflow='clip',
+                                        ).set_bg(
+                                            roundrect_bg(fill=diff_color, radius=8)
+                                        ).set_padding((8, 4)).set_content_align('c')
+                                        TextBox(
+                                            "→",
+                                            themed_text_style("heading", size=22, theme=report_theme),
+                                        ).set_padding(0)
+                                        TextBox(
+                                            f"{cr['rating']:.1f}",
+                                            TextStyle(
+                                                DEFAULT_BOLD_FONT,
+                                                22,
+                                                report_theme.text_primary,
+                                                use_shadow=True,
+                                                shadow_color=PLAY_RESULT_COLORS[cr['result_type']],
+                                                shadow_offset=2,
+                                            ),
+                                            overflow='clip',
+                                        ).set_padding(0)
+
+                                    # 复用已部署的游戏 FC/AP 图标；原版文字 PNG 不在当前素材包中，文字由主题字体绘制。
+                                    play_result_img_path = "icon_fc.png" if cr['result_type'] == 'fc' else "icon_ap.png"
+                                    play_result_label = "FULL COMBO" if cr['result_type'] == 'fc' else "ALL PERFECT"
+                                    with HSplit().set_content_align('l').set_item_align('c').set_sep(6):
+                                        ImageBox(
+                                            ctx.static_imgs.get(play_result_img_path),
+                                            size=(22, 22),
+                                            image_size_mode='fit',
+                                            use_alphablend=True,
+                                            shadow=True,
+                                        )
+                                        TextBox(
+                                            play_result_label,
+                                            themed_text_style("muted", size=12, theme=report_theme),
+                                            overflow='clip',
+                                        ).set_padding(0)
+            else:
+                with report_card(
+                    content_width,
+                    padding=(24, 20),
+                    compact=False,
+                    theme=report_theme,
+                ):
+                    with VSplit().set_w(content_width - 48).set_sep(8).set_content_and_item_align('l'):
+                        TextBox(
+                            "暂无可计入 B30 的 FC / AP 成绩",
+                            themed_text_style("heading", size=20, theme=report_theme),
+                        ).set_padding(0)
+                        TextBox(
+                            "请确认已上传最新成绩，并完成歌曲的 FC 或 AP。",
+                            themed_text_style("secondary", size=14, theme=report_theme),
+                        ).set_padding((0, 4))
+
     add_watermark(canvas)
     return await canvas.get_img()
 
@@ -1949,7 +2135,7 @@ async def _(ctx: SekaiHandlerContext):
 
     try:
         query, aliases = args.split(maxsplit=1)
-        music = (await search_music(ctx, query, MusicSearchOptions(use_id=True, use_emb=False))).music
+        music = (await search_music(ctx, query, MusicSearchOptions(use_id=True))).music
         assert music is not None
         assert aliases
         aliases = aliases.replace("，", ",")
@@ -1995,7 +2181,7 @@ pjsk_alias.check_cdrate(cd).check_wblist(gbl)
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
     try:
-        music = (await search_music(ctx, args, MusicSearchOptions(use_id=True, use_emb=False))).music
+        music = (await search_music(ctx, args, MusicSearchOptions(use_id=True))).music
         assert music is not None
     except:
         return await ctx.asend_reply_msg("请输入正确的歌曲ID/歌曲名")
@@ -2335,170 +2521,17 @@ pjsk_best30 = SekaiCmdHandler([
 pjsk_best30.check_cdrate(cd).check_wblist(gbl)
 @pjsk_best30.handle()
 async def _(ctx: SekaiHandlerContext):
+    args = ctx.get_args().strip()
+    # 通用解析器已提取常见长度 UID；这里补充 13 位 ID 并拒绝多余参数。
+    uid = ctx.uid_arg if ctx.uid_arg and ctx.uid_arg.isdecimal() else None
+    if args:
+        assert_and_reply(not ctx.uid_arg and re.fullmatch(r'[0-9]{13,20}', args),
+                         '用法：/pjsk b30 或 /pjsk b30 游戏UID（13～20 位数字）')
+        uid = args
     return await ctx.asend_reply_msg(await get_image_cq(
-        await compose_best30_image(ctx, ctx.user_id),
+        await compose_best30_image(ctx, ctx.user_id, uid),
         low_quality=True,
     ))
-
-
-# ======================= 定时任务 ======================= #
-
-# 新曲上线提醒
-@repeat_with_interval(60, '新曲上线提醒', logger)
-async def new_music_notify():
-    notified_musics = file_db.get("notified_new_musics", {})
-    updated = False
-
-    for region in ENABLED_SERVER_REGIONS:
-        region_name = get_region_name(region)
-        ctx = SekaiHandlerContext.from_region(region)
-        musics = await ctx.md.musics.get()
-        now = datetime.now()
-
-        need_send_musics = []
-        for music in musics:
-            mid = music["id"]
-            publish_time = datetime.fromtimestamp(music["publishedAt"] / 1000)
-            if mid in notified_musics.get(region, []): continue
-            if now - publish_time > timedelta(hours=6): continue
-            if publish_time - now > timedelta(minutes=1): continue
-            need_send_musics.append(music)
-
-        BATCH_SEND_THRESHOLD = 4
-        if len(need_send_musics) >= BATCH_SEND_THRESHOLD:
-            # 批量发送
-            logger.info(f"发送批量新曲上线提醒: {region} {len(need_send_musics)}首新曲")
-
-            img = await compose_music_brief_list_image(
-                ctx, need_send_musics, title=f"{region_name}新曲上线-{len(need_send_musics)}首", 
-                title_style=TextStyle(font=DEFAULT_BOLD_FONT, size=20, color=(20, 20, 20, 255)),
-            )
-            msg = await get_image_cq(img)
-
-            for group_id in music_group_sub.get_all(region):
-                if not gbl.check_id(group_id): continue
-                try:
-                    group_msg = msg
-                    for uid in music_user_sub.get_all(region, group_id):
-                        group_msg += f"[CQ:at,qq={uid}]"
-                    await send_group_msg_by_bot(group_id, group_msg.strip())
-                except:
-                    logger.print_exc(f"发送新曲上线提醒: {region} 到群 {group_id} 失败")
-                    continue
-
-            if region not in notified_musics:
-                notified_musics[region] = []
-            notified_musics[region].extend(m["id"] for m in need_send_musics)
-            updated = True
-        
-        else:
-            # 分别发送
-            for music in need_send_musics:
-                mid = music["id"]
-                publish_time = datetime.fromtimestamp(music["publishedAt"] / 1000)
-                logger.info(f"发送新曲上线提醒: {region} {music['id']} {music['title']}")
-
-                img = await compose_music_detail_image(
-                    ctx, mid, title=f"{region_name}新曲上线", 
-                    title_style=TextStyle(font=DEFAULT_BOLD_FONT, size=35, color=LinearGradient(
-                        c1=(0, 0, 0, 255), c2=(0, 0, 0, 255), p1=(0, 0), p2=(1, 1),
-                    )), title_shadow=False,
-                )
-                msg = await get_image_cq(img)
-
-                for group_id in music_group_sub.get_all(region):
-                    if not gbl.check_id(group_id): continue
-                    try:
-                        group_msg = msg
-                        for uid in music_user_sub.get_all(region, group_id):
-                            group_msg += f"[CQ:at,qq={uid}] "
-                        await send_group_msg_by_bot(group_id, group_msg.strip())
-                    except:
-                        logger.print_exc(f"发送新曲新曲上线提醒: {region} {music['id']} 到群 {group_id} 失败")
-                        continue
-                
-                if region not in notified_musics:
-                    notified_musics[region] = []
-                notified_musics[region].append(mid)
-                updated = True
-
-    if updated:
-        file_db.set("notified_new_musics", notified_musics)
-
-
-# 新APD上线提醒
-@repeat_with_interval(60, '新APD上线提醒', logger)
-async def new_apd_notify():
-    no_apd_musics = file_db.get("no_apd_musics", {})
-    notified_new_apd = file_db.get("notified_new_apd", {})
-    updated = False
-
-    SEND_LIMIT = 5
-    total_send = 0
-
-    for region in ENABLED_SERVER_REGIONS:
-        region_name = get_region_name(region)
-        ctx = SekaiHandlerContext.from_region(region)
-        musics = await ctx.md.musics.get()
-
-        for music in musics:
-            mid = music["id"]
-            diff_info = await get_music_diff_info(ctx, mid)
-            # 之前已经通知过: 忽略
-            if mid in notified_new_apd.get(region, []): 
-                continue
-            # 歌曲本身无APPEND: 忽略，并尝试添加到no_append_musics中
-            if not diff_info.has_append:
-                if mid not in no_apd_musics.get(region, []):
-                    if region not in no_apd_musics:
-                        no_apd_musics[region] = []
-                    no_apd_musics[region].append(mid)
-                    updated = True
-                continue
-            # 歌曲本身有APPEND，但是之前不在no_append_musics中，即一开始就有APPEND了，忽略，并且认为已经通知过
-            if mid not in no_apd_musics.get(region, []):
-                if mid not in notified_new_apd.get(region, []):
-                    if region not in notified_new_apd:
-                        notified_new_apd[region] = []
-                    notified_new_apd[region].append(mid)
-                    updated = True
-                continue
-            
-            logger.info(f"发送新APPEND上线提醒: {region} {music['id']} {music['title']}")
-
-            total_send += 1
-            
-            if total_send <= SEND_LIMIT:
-                img = await compose_music_detail_image(
-                    ctx, mid, title=f"新{region_name}APPEND谱面上线", 
-                    title_style=TextStyle(font=DEFAULT_BOLD_FONT, size=35, color=DIFF_COLORS['append']),
-                    title_shadow=False,
-                )
-                msg = await get_image_cq(img)
-
-                for group_id in apd_group_sub.get_all(region):
-                    if not gbl.check_id(group_id): continue
-                    try:
-                        group_msg = msg
-                        for uid in apd_user_sub.get_all(region, group_id):
-                            group_msg += f"[CQ:at,qq={uid}] "
-                        await send_group_msg_by_bot(group_id, group_msg.strip())
-                    except:
-                        logger.print_exc(f"发送新APPEND上线提醒: {region} {music['id']} 到群 {group_id} 失败")
-                        continue
-            
-            # 从无APPEND列表中移除
-            if region in no_apd_musics:
-                no_apd_musics[region].remove(mid)
-            # 添加到已通知列表中
-            if region not in notified_new_apd:
-                notified_new_apd[region] = []
-            notified_new_apd[region].append(mid)
-            updated = True
-
-    if updated:
-        file_db.set("no_apd_musics", no_apd_musics)
-        file_db.set("notified_new_apd", notified_new_apd)
 
 
 # 自动同步歌曲别名

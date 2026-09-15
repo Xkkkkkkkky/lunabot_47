@@ -2,9 +2,7 @@ from dataclasses import dataclass
 from ..llm.api_provider import *
 from ..llm.api_providers.aiyyds import AiyydsApiProvider
 from ..llm.api_providers.openrouter import OpenrouterApiProvider
-from ..llm.api_providers.siliconflow import SiliconflowApiProvider
 from ..llm.api_providers.google import GoogleApiProvider
-from ..llm.api_providers.new_api import NewApiApiProvider
 from ..llm.api_providers.deepseek import DeepseekApiProvider
 from ..llm.api_providers.mimo import MimoApiProvider
 from typing import Tuple
@@ -156,9 +154,7 @@ class ApiProviderManager:
 api_provider_mgr = ApiProviderManager([
     AiyydsApiProvider(),
     OpenrouterApiProvider(),
-    SiliconflowApiProvider(),
     GoogleApiProvider(),
-    NewApiApiProvider(),
     DeepseekApiProvider(),
     MimoApiProvider(),
 ])

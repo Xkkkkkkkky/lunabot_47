@@ -1,14 +1,18 @@
 from .utils import *
 from aiohttp import ClientSession, ClientConnectionError, ClientTimeout
 
-REQUEST_TIMEOUT = 5.0
+REQUEST_TIMEOUT = 30.0
 
 _session: ClientSession | None = None
 
 def get_session() -> ClientSession:
     global _session
     if _session is None or _session.closed:
-        _session = ClientSession(timeout=ClientTimeout(total=REQUEST_TIMEOUT))
+        # 使用环境代理，但保留 aiohttp 默认的 TLS 证书校验。
+        _session = ClientSession(
+            trust_env=True,
+            timeout=ClientTimeout(total=REQUEST_TIMEOUT),
+        )
     return _session
 
 async def close_session():
@@ -24,15 +28,8 @@ class GameApiConfig:
     api_status_url: Optional[str] = None
     profile_api_url: Optional[str] = None 
     suite_api_url: Optional[str] = None
-    mysekai_api_url: Optional[str] = None  
-    mysekai_photo_api_url: Optional[str] = None 
-    mysekai_upload_time_api_url: Optional[str] = None 
-    update_msr_sub_api_url: Optional[str] = None
-    ranking_api_url: Optional[str] = None
-    send_boost_api_url: Optional[str] = None
-    create_account_api_url: Optional[str] = None
-    ad_result_update_time_api_url: Optional[str] = None
-    ad_result_api_url: Optional[str] = None
+    ranking_top100_api_url: Optional[str] = None
+    ranking_border_api_url: Optional[str] = None
 
 
 # 获取游戏api相关配置
@@ -41,16 +38,30 @@ def get_gameapi_config(region: str) -> GameApiConfig:
 
 
 # 请求游戏API data_type: json/bytes/None
-async def request_gameapi(url: str, method: str = 'GET', data_type: str | None = 'json', **kwargs):
+async def request_gameapi(
+    url: str,
+    method: str = 'GET',
+    data_type: str | None = 'json',
+    authenticated: bool = False,
+    **kwargs,
+):
     debug(f"请求游戏API后端: {method} {url}")
-    token = config.get('gameapi_token', '')
-    headers = { 'Authorization': f'Bearer {token}' }
+    headers = dict(kwargs.pop('headers', {}) or {})
+    if authenticated:
+        token = str(config.get('gameapi_token', '') or '').strip()
+        if not token:
+            raise RuntimeError('未配置 Haruki 游戏 API 令牌，事件榜线服务不会开始记录')
+        # Haruki-Sekai-API 的受保护接口使用专用请求头。
+        headers['X-Haruki-Sekai-Token'] = token
     try:
-        async with get_session().request(method, url, headers=headers, verify_ssl=False, **kwargs) as resp:
+        async with get_session().request(method, url, headers=headers, **kwargs) as resp:
             if resp.status != 200:
+                detail = resp.reason or '请求失败'
                 try:
                     detail = await resp.text()
-                    detail = loads_json(detail)['detail']
+                    detail_json = loads_json(detail)
+                    if isinstance(detail_json, dict):
+                        detail = detail_json.get('detail', detail_json.get('message', detail_json))
                 except:
                     pass
                 error(f"请求游戏API后端 {url} 失败: {resp.status} {detail}")
@@ -73,5 +84,3 @@ async def request_gameapi(url: str, method: str = 'GET', data_type: str | None =
                 
     except ClientConnectionError as e:
         raise Exception(f"连接游戏API后端失败")
-
-

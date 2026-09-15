@@ -1,8 +1,8 @@
 # 模型预设把业务用途映射到 provider_code:model_name。
 # 字符串表示单模型，列表表示按顺序失败回退；"&路径" 是项目自定义引用语法，
 # 不是 YAML anchor，必须保留引号。引用路径使用点号访问本文件中的其他键。
-basic_chat_text: ds:deepseek-v4-flash-vision-exp  # 通用纯文本模型别名
-basic_chat_mm: ds:deepseek-v4-flash-vision-exp    # 通用图片理解模型别名
+basic_chat_text: ds:deepseek-v4.1-flash-expires-on-0910  # 通用纯文本模型别名
+basic_chat_mm: ds:deepseek-v4.1-flash-expires-on-0910    # 通用图片理解模型别名
 
 # 短文本翻译的失败回退列表。
 translation:

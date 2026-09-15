@@ -144,7 +144,7 @@ async def get_user_power_bonus(ctx: SekaiHandlerContext, profile: dict) -> Dict[
             lv = user_area_item['level']
             area_items.append(find_by(find_by(await ctx.md.area_item_levels.get(), 'areaItemId', item_id, mode='all'), 'level', lv))
 
-    # 角色加成 = 区域道具 + 角色等级 + 烤森家具
+    # 角色加成 = 区域道具 + 角色等级 + Suite 中的家具加成汇总
     chara_bonus = { i : {
         'area_item': 0,
         'rank': 0,
@@ -156,24 +156,17 @@ async def get_user_power_bonus(ctx: SekaiHandlerContext, profile: dict) -> Dict[
     for chara in profile['userCharacters']:
         rank = find_by(await ctx.md.character_ranks.find_by('characterId', chara['characterId'], mode='all'), 'characterRank', chara['characterRank'])
         chara_bonus[chara['characterId']]['rank'] += rank['power1BonusRate']
+    # 直接读取 Suite 汇总值，不加载专用主数据文件。
     for fb in profile.get('userMysekaiFixtureGameCharacterPerformanceBonuses', []):
         chara_bonus[fb['gameCharacterId']]['fixture'] += fb['totalBonusRate'] * 0.1
-    
-    # 组合加成 = 区域道具 + 烤森门
+
+    # 组合加成 = 区域道具
     unit_bonus = { unit : {
         'area_item': 0,
-        'gate': 0,
     } for unit in UNITS }
     for item in area_items:
         if item.get('targetUnit', "any") != "any":
             unit_bonus[item['targetUnit']]['area_item'] += item['power1BonusRate']
-    max_bonus = 0
-    for gate in profile.get('userMysekaiGates', []):
-        gate_id = gate['mysekaiGateId']
-        bonus = find_by(await ctx.md.mysekai_gate_levels.find_by('mysekaiGateId', gate_id, mode='all'), 'level', gate['mysekaiGateLevel'])
-        unit_bonus[UNITS[gate_id - 1]]['gate'] += bonus['powerBonusRate']
-        max_bonus = max(max_bonus, bonus['powerBonusRate'])
-    unit_bonus[UNIT_VS]['gate'] += max_bonus
 
     # 属性加成 = 区域道具
     attr_bouns = { attr : {
@@ -201,7 +194,7 @@ async def compose_power_bonus_detail_image(ctx: SekaiHandlerContext, qid: int) -
     profile, err_msg = await get_detailed_profile(
         ctx, 
         qid, 
-        filter=get_detailed_profile_card_filter('userAreas','userCharacters','userMysekaiFixtureGameCharacterPerformanceBonuses','userMysekaiGates'), 
+        filter=get_detailed_profile_card_filter('userAreas','userCharacters','userMysekaiFixtureGameCharacterPerformanceBonuses'),
         raise_exc=True)
  
     bonus = await get_user_power_bonus(ctx, profile)
@@ -234,7 +227,7 @@ async def compose_power_bonus_detail_image(ctx: SekaiHandlerContext, qid: int) -
                         with HSplit().set_content_align('l').set_item_align('l').set_sep(4):
                             ImageBox(get_unit_icon(unit), size=(None, 40))
                             TextBox(f"{unit_bonus[unit]['total']:.1f}%", header_style).set_w(100).set_content_align('r').set_overflow('clip')
-                            detail = f"区域道具{unit_bonus[unit]['area_item']:.1f}% + 烤森门{unit_bonus[unit]['gate']:.1f}%"
+                            detail = f"区域道具{unit_bonus[unit]['area_item']:.1f}%"
                             TextBox(detail, text_style)
 
                 # 属性加成
@@ -834,4 +827,3 @@ async def _(ctx: SekaiHandlerContext):
         await compose_leader_count_image(ctx, ctx.user_id),
         low_quality=True,
     ))
-

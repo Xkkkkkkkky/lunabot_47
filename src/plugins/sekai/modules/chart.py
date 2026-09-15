@@ -4,7 +4,6 @@ from ..handler import *
 from ..asset import *
 from ..draw import *
 from .music import *
-from .deck import musicmetas_json
 from src.pjsekai import scores as pjsekai_scores
 
 # ======================= 处理逻辑 ======================= #
@@ -179,4 +178,3 @@ async def _(ctx: SekaiHandlerContext):
         
     msg += ret.candidate_msg
     return await ctx.asend_reply_msg(msg.strip())
-

@@ -56,11 +56,6 @@ async def rpc_get_new_msgs():
         msg=msg['msg'],
     ) for msg in msgs]
 
-async def rpc_query_embeddings(texts: list[str], model_name: str) -> list[list[float]]:
-    return await rpc_session.call('query_embedding', texts, model_name)
-
-
-
 # ================ 处理逻辑 ================= #
 
 file_db = get_file_db("data/chat/autochat/db.json")
@@ -212,26 +207,6 @@ def get_plain_text(msg: Message) -> str:
     return ret.strip()
 
 
-async def generate_summary(text: str) -> str:
-    try:
-        info(f"开始生成文本摘要: {truncate(text, 20)}")
-        summary = await rpc_query_llm(
-            model=config.get('summary.model'),
-            prompt=config.get('summary.prompt').format(text=text),
-            images=[],
-            options={
-                'timeout': config.get('summary.timeout'),
-                'max_tokens': config.get('summary.max_tokens'),
-            }
-        )
-        info(f"生成文本摘要成功: {summary}")
-        return summary
-    except Exception as e:
-        error(f"生成摘要失败: {e}")
-        return ""
-
-
-
 # ================ 主聊天逻辑 ================= #
     
 _self_infos: dict[int, dict] = {}
@@ -318,24 +293,6 @@ async def chat(msg: Message):
             emotion_caption_limit=config.get('image_caption.emotion_limit'),
             emotion_caption_prob=config.get('image_caption.emotion_prob'),
         )
-        recent_summary = await generate_summary(recent_text)
-        if recent_summary == "":
-            warning("生成聊天记录摘要失败，放弃聊天处理")
-            return
-
-        last_long_msg = None
-        for m in reversed(recent_msgs):
-            msg_text = get_plain_text(m)
-            if len(msg_text) >= 4:
-                last_long_msg = msg_text
-                break
-
-        texts_to_embed = [recent_summary]
-        if last_long_msg:
-            texts_to_embed.append(last_long_msg)
-        query_embs = await rpc_query_embeddings(texts_to_embed, config.get('chat.llm.emb_model'))
-        recent_emb = query_embs[0]
-            
     except:
         error(f"处理消息时失败，放弃聊天处理")
         return
@@ -344,22 +301,6 @@ async def chat(msg: Message):
 
     try:
         mem = get_group_memory_system(msg.group_id)
-
-        # 获取事件记忆
-        short_em_num, long_em_num = config.get('chat.mem.short_em_num'), config.get('chat.mem.long_em_num')
-        em_text = ""
-        short_ems, long_ems = [], []
-        if short_em_num + long_em_num > 0:
-            short_ems = mem.em_query(query_embs, short_em_num, 'short_term', config.get('chat.mem.em_time_decay_per_hour'))
-            long_ems = mem.em_query(query_embs, long_em_num, 'long_term')
-            info(f"获取短期事件记忆共 {len(short_ems)} 条: {[e.id for e in short_ems]}")
-            info(f"获取长期事件记忆共 {len(long_ems)} 条: {[e.id for e in long_ems]}")
-            if short_ems or long_ems:
-                em_text += "可能与你当前聊天内容相关的记忆事件:\n"
-                em_text += "```\n"
-                for em in short_ems + long_ems:
-                    em_text += f"{get_readable_datetime(datetime.fromtimestamp(em.created_at))}: {em.text}\n"
-                em_text += "```\n"
 
         # 获取自身回复记忆
         sm_num = config.get('chat.mem.sm_num')
@@ -434,7 +375,6 @@ async def chat(msg: Message):
             self_name=self_name,
             persona=persona,
             recent_text=recent_text,
-            em_text=em_text,
             sm_text=sm_text,
             um_text=um_text,
         )
@@ -531,25 +471,6 @@ async def chat(msg: Message):
     # ---------------- 更新记忆 ---------------- #
 
     try:
-        # 添加事件记忆
-        mem.em_add(
-            text=recent_summary,
-            embedding=recent_emb,
-            initial_weight=0.0,
-        )
-        # 短期记忆添加权重
-        for em in short_ems:
-            mem.em_increase_weight(
-                memory_id=em.id,
-                weight_increase=config.get('chat.mem.short_em_reward'),
-                threshold=config.get('chat.mem.em_long_term_threshold'),
-            )
-        # 遗忘短期记忆
-        mem.em_forget(
-            forget_time=(datetime.now() - timedelta(days=config.get('chat.mem.short_em_forget_days'))).timestamp(),
-            forget_prob=config.get('chat.mem.short_em_forget_prob'),
-        )
-
         # 添加用户记忆
         if isinstance(user_updates, list):
             for update in user_updates:

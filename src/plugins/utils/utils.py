@@ -275,7 +275,8 @@ _global_client_session: Optional[aiohttp.ClientSession] = None
 def get_client_session() -> aiohttp.ClientSession:
     global _global_client_session
     if _global_client_session is None or _global_client_session.closed:
-        _global_client_session = aiohttp.ClientSession()
+        # 遵循部署环境的代理与 NO_PROXY 设置，保证资源下载和本机后端均可访问。
+        _global_client_session = aiohttp.ClientSession(trust_env=True)
     return _global_client_session
 
 @on_shutdown()

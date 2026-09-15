@@ -1409,7 +1409,7 @@ def _image_detail(manager: NsyManager, image: NsyImage) -> ImageDetail:
 # ======================= 指令处理 ======================= #
 
 nsy_gallery_query = _nsy_cmd(
-    ['/查图库', '查图库'],
+    ['/查图库'],
     force_whitespace=True,
 )
 

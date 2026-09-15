@@ -43,7 +43,7 @@ class Drawing:
         score: Score,
         lyric: Lyric = None,
         style_sheet: str = '',
-        note_host: str = 'https://asset3.pjsekai.moe/live/note/custom01',
+        note_host: str = '',
         skill: bool = False,
         music_meta: Optional[dict] = None,
         target_segment_seconds: Optional[float] = None,
@@ -339,7 +339,7 @@ class Drawing:
         ))
 
         drawing.add(svgwrite.image.Image(
-            href=self.score.meta.jacket or 'https://storage.sekai.best/sekai-jp-assets/thumbnail/chara_rip/res009_no021_normal.png',
+            href=self.score.meta.jacket or '',
             insert=(
                 self.lane_padding * 2,
                 height + self.time_padding * 3,

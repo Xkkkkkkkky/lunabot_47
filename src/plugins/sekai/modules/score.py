@@ -3,7 +3,6 @@ from ..common import *
 from ..handler import *
 from ..asset import *
 from ..draw import *
-from .deck import BOOST_BONUS_DICT
 from .music import (
     get_music_cover_thumb, 
     search_music, 
@@ -777,7 +776,7 @@ async def _(ctx: SekaiHandlerContext):
 
     mids = []
     for seg in args:
-        res = await search_music(ctx, seg, options=MusicSearchOptions(use_emb=False))
+        res = await search_music(ctx, seg, options=MusicSearchOptions())
         assert_and_reply(res.music, f"未找到匹配的歌曲: {seg}")
         mids.append(res.music['id'])
 
@@ -948,7 +947,7 @@ async def _(ctx: SekaiHandlerContext):
             seg = seg.replace('*', '', 1)
         else:
             diff, seg = extract_diff(seg, None)
-        res = await search_music(ctx, seg, options=MusicSearchOptions(diff=diff, use_emb=False))
+        res = await search_music(ctx, seg, options=MusicSearchOptions(diff=diff))
         assert_and_reply(res.music, f"找不到歌曲或参数错误:\"{seg}\"\n发送\"{ctx.trigger_cmd}help\"获取帮助")
         diffs = [diff] if diff else list((await get_music_diff_info(ctx, res.music['id'])).level.keys())
         spec_mid_diffs.extend([(res.music['id'], diff) for diff in diffs])
@@ -976,4 +975,3 @@ async def _(ctx: SekaiHandlerContext):
         )
     )
 
-    

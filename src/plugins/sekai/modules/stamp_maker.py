@@ -11,8 +11,9 @@ STAMP_MAKER_BASE_DIR = f"{SEKAI_ASSET_DIR}/stamp_maker"
 
 # ----------------------------------------- configs ----------------------------------------- #
 
-font_path = f"{STAMP_MAKER_BASE_DIR}/fonts/ShangShouFangTangTi.ttf"
-font_jp_path = f"{STAMP_MAKER_BASE_DIR}/fonts/YurukaStd.woff2"
+# 使用部署者已配置的中日文字体，避免依赖未随项目提供的商业字体。
+font_path = Config('global').get('font.path')
+font_jp_path = font_path
 font_size = 100
 font_jp_size = 80
 s_font_zoom_ratio = 0.8

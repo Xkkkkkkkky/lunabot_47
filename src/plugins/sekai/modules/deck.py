@@ -3,8 +3,7 @@ from ..common import *
 from ..handler import *
 from ..asset import *
 from ..draw import *
-from .event import get_event_banner_img, get_current_event
-from .sk import get_wl_events
+from .event import get_event_banner_img, get_current_event, get_wl_events
 from .profile import (
     get_player_bind_id,
     get_basic_profile,
@@ -34,23 +33,6 @@ from sekai_deck_recommend_cpp import (
     RecommendDeck,
 )
 
-MYSEKAI_REGIONS = ENABLED_SERVER_REGIONS if config.get('features.mysekai', True) else []
-
-
-BOOST_BONUS_DICT: Dict[int, int] = {
-    0: 1,
-    1: 5,
-    2: 10,
-    3: 15,
-    4: 20,
-    5: 25,
-    6: 27,
-    7: 29,
-    8: 31,
-    9: 33,
-    10: 35,
-}
-
 RECOMMEND_TIMEOUT_CFG = config.item('deck.timeout.default')
 NO_EVENT_RECOMMEND_TIMEOUT_CFG = config.item('deck.timeout.no_event')
 SINGLE_ALG_RECOMMEND_TIMEOUT_CFG = config.item('deck.timeout.single_alg')
@@ -75,7 +57,6 @@ SKILL_TARGET_KEYWORDS = ('倍率', '实效', 'skill', '时效')
 SKILL_MAX_KEYWORDS = ("满技能", "满技", "skillmax", "技能满级", "slv4")
 MASTER_MAX_KEYWORDS = ("满突破", "满破", "rankmax", "mastermax", "5破", "五破")
 EPISODE_READ_KEYWORDS = ("剧情已读", "满剧情", "前后篇已读", "前后篇", "已读")
-CANVAS_KEYWORDS = ("满画布", "全画布", "画布", "满画板", "全画板", "画板")
 DISABLE_KEYWORDS = ("禁用", "disable")
 TEAMMATE_POWER_KEYWORDS = ("队友综合力", "队友总合力", "队友综合", "队友总和")
 TEAMMATE_SCOREUP_KEYWORDS = ("队友实效", "队友技能", "队友时效")
@@ -114,7 +95,6 @@ DEFAULT_CARD_CONFIG_12.level_max = True
 DEFAULT_CARD_CONFIG_12.episode_read = True
 DEFAULT_CARD_CONFIG_12.master_max = True
 DEFAULT_CARD_CONFIG_12.skill_max = True
-DEFAULT_CARD_CONFIG_12.canvas = False
 
 DEFAULT_CARD_CONFIG_34bd = DeckRecommendCardConfig()
 DEFAULT_CARD_CONFIG_34bd.disable = False
@@ -122,7 +102,6 @@ DEFAULT_CARD_CONFIG_34bd.level_max = True
 DEFAULT_CARD_CONFIG_34bd.episode_read = False
 DEFAULT_CARD_CONFIG_34bd.master_max = False
 DEFAULT_CARD_CONFIG_34bd.skill_max = False
-DEFAULT_CARD_CONFIG_34bd.canvas = False
 
 NOCHANGE_CARD_CONFIG = DeckRecommendCardConfig()
 NOCHANGE_CARD_CONFIG.disable = False
@@ -130,7 +109,6 @@ NOCHANGE_CARD_CONFIG.level_max = False
 NOCHANGE_CARD_CONFIG.episode_read = False
 NOCHANGE_CARD_CONFIG.master_max = False
 NOCHANGE_CARD_CONFIG.skill_max = False
-NOCHANGE_CARD_CONFIG.canvas = False
 
 DEFAULT_TEAMMATE_POWER = 250000
 DEFAULT_TEAMMATE_SCOREUP = 200
@@ -482,7 +460,7 @@ def extract_card_config(args: str, options: DeckRecommendOptions, default_nochan
     def has_config_keyword(s: str):
         return any(
             keyword in s for keyword 
-            in DISABLE_KEYWORDS + SKILL_MAX_KEYWORDS + MASTER_MAX_KEYWORDS + EPISODE_READ_KEYWORDS + CANVAS_KEYWORDS
+            in DISABLE_KEYWORDS + SKILL_MAX_KEYWORDS + MASTER_MAX_KEYWORDS + EPISODE_READ_KEYWORDS
         )
 
     def apply_card_config(args: str, cfgs: List[DeckRecommendCardConfig]) -> str:
@@ -508,12 +486,6 @@ def extract_card_config(args: str, options: DeckRecommendOptions, default_nochan
             if keyword in args:
                 for cfg in cfgs:
                     cfg.episode_read = True
-                args = args.replace(keyword, "").strip()
-                break
-        for keyword in CANVAS_KEYWORDS:
-            if keyword in args:
-                for cfg in cfgs:
-                    cfg.canvas = True
                 args = args.replace(keyword, "").strip()
                 break
         return args.strip()
@@ -628,7 +600,6 @@ async def extract_music_and_diff(
 ) -> str:
     jp_ctx = SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION)
     search_options = MusicSearchOptions(
-        use_emb=False,
         use_id=True,
         use_nidx=True,
         raise_when_err=False,
@@ -1213,21 +1184,12 @@ async def do_deck_recommend_batch(
 
 # 构造顶配profile
 async def construct_max_profile(ctx: SekaiHandlerContext, max_area_item_level: int | None = None) -> dict:
-    try: 
-        await ctx.md.mysekai_gates.get()
-        has_mysekai = True
-    except:
-        has_mysekai = False
-
     p = {
         'userGamedata': {},
         'userDecks': [],
         'userCards': [],
         'userHonors': [],
-        "userMysekaiCanvases": [],
         "userCharacters": [],
-        "userMysekaiGates": [],
-        "userMysekaiFixtureGameCharacterPerformanceBonuses": [],
         "userAreas": [],
     }
 
@@ -1258,12 +1220,6 @@ async def construct_max_profile(ctx: SekaiHandlerContext, max_area_item_level: i
                 } for ep in episodes
             ]
         })
-        if has_mysekai:
-            p['userMysekaiCanvases'].append({
-                'cardId': card['id'],
-                "quantity": 1,
-            })
-
     for honor in await ctx.md.honors.get():
         if honor.get('levels'):
             p['userHonors'].append({
@@ -1277,28 +1233,6 @@ async def construct_max_profile(ctx: SekaiHandlerContext, max_area_item_level: i
             "characterRank": 120,
         })
 
-    if has_mysekai:
-        for gid in range(1, 6):
-            p['userMysekaiGates'].append({
-                "mysekaiGateId": gid,
-                "mysekaiGateLevel": 40,
-            })
-        
-        fixture_chara_bonus = { cid: 0 for cid in range(1, 27) }
-        for fixture in await ctx.md.mysekai_fixtures.get():
-            bid = fixture.get('mysekaiFixtureGameCharacterGroupPerformanceBonusId')
-            if bid:
-                cid = (bid - 1) // 3 + 1
-                t = (bid - 1) % 3
-                if t == 0: fixture_chara_bonus[cid] += 1
-                elif t == 1: fixture_chara_bonus[cid] += 3
-                else: fixture_chara_bonus[cid] += 6
-        for cid in range(1, 27):
-            p['userMysekaiFixtureGameCharacterPerformanceBonuses'].append({
-                "gameCharacterId": cid,
-                "totalBonusRate": min(fixture_chara_bonus[cid], 100)
-            })
-    
     levels = {}
     for item in await ctx.md.area_item_levels.get():
         item_id = item['areaItemId']
@@ -1431,9 +1365,7 @@ async def compose_deck_recommend_image(
                     'userDecks',
                     'userCards',
                     'userHonors',
-                    "userMysekaiCanvases",
                     "userCharacters",
-                    "userMysekaiGates",
                     "userMysekaiFixtureGameCharacterPerformanceBonuses",
                     "userAreas", 
                     'userChallengeLiveSoloDecks',
@@ -1490,7 +1422,7 @@ async def compose_deck_recommend_image(
         else:
             basic_profile = await get_basic_profile(
                 ctx, get_player_bind_id(ctx), 
-                use_cache=False, use_remote_cache=False,
+                use_cache=False,
             )
             options.fixed_cards = [basic_profile['userDeck'][f'member{i}'] for i in range(1, 6)]
             options.fixed_characters = None
@@ -1781,7 +1713,7 @@ async def compose_deck_recommend_image(
                             title += f"烤森活动#{event_id}组卡"
                         else:
                             title += f"烤森模拟活动组卡"
-                    elif recommend_type in ['challenge', 'challenge_all']: 
+                    elif recommend_type in ['challenge', 'challenge_all']:
                         title += "每日挑战组卡"
                         if options.live_type == "challenge_auto":
                             title += "(AUTO)"
@@ -2011,10 +1943,6 @@ async def compose_deck_recommend_image(
                                                     else:
                                                         TextBox(str(card_id), TextStyle(font=DEFAULT_FONT, size=10, color=(75, 75, 75))) \
                                                             .set_bg(RoundRectBg((255, 255, 255, 200), 2)).set_offset((-2, 0)).set_text_offset((0, -2))
-                                                    if card.has_canvas_bonus:
-                                                        ImageBox(ctx.static_imgs.get(f"mysekai/icon_canvas.png"), size=(11, 11)) \
-                                                                .set_offset((-32, 65))
-
                                                 info_bg = RoundRectBg((255, 255, 255, 150), 2)
                                                 with HSplit().set_content_align('c').set_item_align('c').set_sep(3).set_padding(0):
                                                     TextBox(f"SLv.{slv}", TextStyle(font=DEFAULT_FONT, size=12, color=(50, 50, 50))).set_bg(info_bg)
@@ -2190,7 +2118,7 @@ mysekai_deck = SekaiCmdHandler([
     "/mysekai deck", "/pjsk mysekai deck",
     "/烤森组卡", "/烤森组队", "/烤森卡组", "/烤森配队",
     "/ms组卡", "/ms组队", "/ms卡组", "/ms配队",
-], disabled=not config.get('features.mysekai', True))
+])
 mysekai_deck.check_cdrate(cd).check_wblist(gbl)
 @mysekai_deck.handle()
 async def _(ctx: SekaiHandlerContext):
@@ -2274,14 +2202,6 @@ async def deckrec_update_data():
                         ctx.md.world_blooms.get_path(),
                         ctx.md.world_bloom_support_deck_bonuses.get_path(),
                     ]
-                    if ctx.region in MYSEKAI_REGIONS:
-                        mds += [
-                            ctx.md.card_mysekai_canvas_bonuses.get_path(),
-                            ctx.md.mysekai_fixture_game_character_groups.get_path(),
-                            ctx.md.mysekai_fixture_game_character_group_performance_bonuses.get_path(),
-                            ctx.md.mysekai_gates.get_path(),
-                            ctx.md.mysekai_gate_levels.get_path(),
-                        ]
                     if await ctx.md.events.find_by_id(180):
                         mds.append(ctx.md.world_bloom_support_deck_unit_event_limited_bonuses.get_path())
                     for path in await asyncio.gather(*mds):

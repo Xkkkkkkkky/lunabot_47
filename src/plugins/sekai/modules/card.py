@@ -390,7 +390,7 @@ async def compose_card_story_summary_msg_list(
         additional_info_text += f"EP#{i} {summary.get(ep['title'], {}).get('additional_info', '')}\n"
 
     msg_lists.append(f"""
-以上内容由Lunabot生成
+以上内容由Lunabot_47生成
 {additional_info_text.strip()}
 使用\"/卡牌剧情 卡牌id\"查询对应活动总结
 使用\"/卡牌剧情 卡牌id refresh\"可刷新AI活动总结

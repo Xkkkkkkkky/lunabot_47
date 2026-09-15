@@ -10,13 +10,13 @@ debug_log_img_cache: false                    # 是否启用解包资源图片�
 jp:
   masterdata:
     sources:
-      # Haruki 仓库仅提供日服实时 MasterData；最终路径例如 {base_url}cards.json。
+      # Haruki 仓库仅提供日服实时 MasterData；请在真实 config 中填写地址。
       - name: "haruki"
-        base_url: "https://raw.githubusercontent.com/Team-Haruki/haruki-sekai-master/refs/heads/main/master/"
-        version_url: "https://raw.githubusercontent.com/Team-Haruki/haruki-sekai-master/refs/heads/main/versions/current_version.json"
+        base_url: ""
+        version_url: ""
 
   rip:  # 解包资源数据源
     sources:
-      # name 必须保持为 sekai.best，以启用源码内置的路径映射（去除 _rip，谱面补 .txt）。
+      # name 必须保持为 sekai.best；请在真实 config 中填写资源地址。
       - name: "sekai.best"
-        base_url: "https://storage.sekai.best/sekai-jp-assets/"
+        base_url: ""

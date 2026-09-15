@@ -1,7 +1,6 @@
 from ..llm import (
     ChatSession, 
     download_image_to_b64, 
-    tts, 
     ChatSessionResponse, 
     api_provider_mgr, 
     translate_text, 
@@ -25,7 +24,6 @@ gwl = get_group_white_list(file_db, logger, 'chat')
 at_trigger_chat_gbl = get_group_black_list(file_db, logger, 'atchat', is_service=False)
 
 chat_cd = ColdDown(file_db, logger, config.item('chat_cd'), cold_down_name="chat_cd")
-tts_cd = ColdDown(file_db, logger, config.item('tts_cd'), cold_down_name="tts_cd")
 img_trans_cd = ColdDown(file_db, logger, config.item('img_trans_cd'), cold_down_name="img_trans_cd")
 
 
@@ -627,18 +625,6 @@ async def _(ctx: HandlerContext):
         quota = await provider.aget_current_quota()
         msg += f"{provider.name}({provider.code}) {quota:.4f}{provider.get_price_unit()}\n"
     return await ctx.asend_reply_msg(msg.strip())
-
-
-# TTS
-tts_request = CmdHandler(["/tts"], logger)
-tts_request.check_cdrate(tts_cd).check_wblist(gwl)
-@tts_request.handle()
-async def _(ctx: HandlerContext):
-    text = ctx.get_args().strip()
-    if not text: return
-    with TempFilePath("mp3", remove_after=timedelta(minutes=3)) as path:
-        await tts(text, path)
-        return await ctx.asend_msg(f"[CQ:record,file=file://{path}]")
 
 
 translator = Translator()

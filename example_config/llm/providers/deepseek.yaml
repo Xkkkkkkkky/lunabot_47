@@ -17,8 +17,16 @@ models:
     input_pricing: "0.14/1000000"
     output_pricing: "0.28/1000000"
 
+  - name: "deepseek-v4.1-flash-expires-on-0910"
+    max_token: 1000000      # 上下文容量元数据
+    is_multimodal: true     # 允许 bot 把 Base64 图片随会话发送
+    input_pricing: "0.14/1000000"
+    output_pricing: "0.28/1000000"
+
   - name: "deepseek-v4-pro"
     max_token: 1000000
     is_multimodal: false
     input_pricing: "1.74/1000000"
     output_pricing: "3.48/1000000"
+
+

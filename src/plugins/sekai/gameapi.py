@@ -9,15 +9,8 @@ class GameApiConfig:
     api_status_url: Optional[str] = None
     profile_api_url: Optional[str] = None 
     suite_api_url: Optional[str] = None
-    mysekai_api_url: Optional[str] = None  
-    mysekai_photo_api_url: Optional[str] = None 
-    mysekai_upload_time_api_url: Optional[str] = None 
-    update_msr_sub_api_url: Optional[str] = None
-    ranking_api_url: Optional[str] = None
-    send_boost_api_url: Optional[str] = None
-    create_account_api_url: Optional[str] = None
-    ad_result_update_time_api_url: Optional[str] = None
-    ad_result_api_url: Optional[str] = None
+    ranking_top100_api_url: Optional[str] = None
+    ranking_border_api_url: Optional[str] = None
 
 
 # 获取游戏api相关配置
@@ -26,20 +19,26 @@ def get_gameapi_config(ctx: SekaiHandlerContext) -> GameApiConfig:
 
 
 # 请求游戏API data_type: json/bytes/None
-async def request_gameapi(url: str, method: str = 'GET', data_type: str | None = 'json', **kwargs):
-    # logger.debug(f"请求游戏API后端: {method} {url}")
-    token = config.get('gameapi_token', '')
-    headers = { 'Authorization': f'Bearer {token}' }
+async def request_gameapi(url: str, method: str = 'GET', data_type: str | None = 'json', authenticated: bool = False, **kwargs):
+    # Toolbox 公共数据无需令牌；游戏代理凭据仅发送给显式标记的受保护接口。
+    headers = {}
+    if authenticated:
+        token = config.get('gameapi_token', '')
+        assert_and_reply(token, '尚未配置 Haruki 游戏 API 令牌，请联系部署者')
+        headers['X-Haruki-Sekai-Token'] = token
+    timeout = aiohttp.ClientTimeout(total=config.get('gameapi_timeout', 30))
     try:
-        async with get_client_session().request(method, url, headers=headers, verify_ssl=False, **kwargs) as resp:
+        async with get_client_session().request(method, url, headers=headers, timeout=timeout, **kwargs) as resp:
             if resp.status != 200:
+                detail = resp.reason or '请求失败'
                 try:
                     detail = await resp.text()
                     detail = loads_json(detail)
-                    detail = detail.get('detail', detail)
+                    if isinstance(detail, dict):
+                        detail = detail.get('detail', detail.get('message', detail))
                 except:
                     pass
-                utils_logger.error(f"请求游戏API后端 {url} 失败: {resp.status} {detail}")
+                utils_logger.error(f"请求游戏API后端失败: HTTP {resp.status}")
                 raise HttpError(resp.status, detail)
             
             if data_type is None:
@@ -59,3 +58,5 @@ async def request_gameapi(url: str, method: str = 'GET', data_type: str | None =
                 
     except aiohttp.ClientConnectionError as e:
         raise Exception(f"连接游戏API后端失败，请稍后再试")
+    except asyncio.TimeoutError:
+        raise ReplyException('游戏 API 请求超时，请稍后再试')

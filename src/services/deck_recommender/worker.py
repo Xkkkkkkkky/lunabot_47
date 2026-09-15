@@ -16,6 +16,89 @@ from concurrent.futures import ThreadPoolExecutor
 import setproctitle
 
 
+# 以下组卡模式无需专用主数据文件；烤森活动 PT 也由普通卡牌和活动数据计算。
+SUPPORTED_LIVE_TYPES = frozenset({
+    'multi',
+    'solo',
+    'auto',
+    'challenge',
+    'challenge_auto',
+    'mysekai',
+})
+SUPPORTED_CARD_CONFIG_FIELDS = frozenset({
+    'disable',
+    'level_max',
+    'episode_read',
+    'master_max',
+    'skill_max',
+})
+SUPPORTED_USER_DATA_FIELDS = frozenset({
+    'userGamedata',
+    'userDecks',
+    'userCards',
+    'userHonors',
+    'userCharacters',
+    # 家具加成由 Suite 提供汇总值，不需要专用主数据文件。
+    'userMysekaiFixtureGameCharacterPerformanceBonuses',
+    'userAreas',
+    'userChallengeLiveSoloDecks',
+    'userChallengeLiveSoloHighScoreRewards',
+    'userChallengeLiveSoloStages',
+    'userChallengeLiveSoloResults',
+    'userMusicResults',
+})
+CARD_CONFIG_NAMES = (
+    'rarity_1_config',
+    'rarity_2_config',
+    'rarity_3_config',
+    'rarity_birthday_config',
+    'rarity_4_config',
+)
+
+
+def validate_options_payload(options: dict) -> None:
+    """校验服务对外接受的组卡模式与卡牌配置字段。"""
+    if not isinstance(options, dict):
+        raise ValueError('组卡参数必须为对象')
+    if options.get('live_type') not in SUPPORTED_LIVE_TYPES:
+        raise ValueError('不支持的组卡模式')
+
+    for name in CARD_CONFIG_NAMES:
+        config = options.get(name)
+        if config is None:
+            continue
+        if not isinstance(config, dict):
+            raise ValueError(f'{name} 必须为对象')
+        unsupported = set(config) - SUPPORTED_CARD_CONFIG_FIELDS
+        if unsupported:
+            raise ValueError(f'{name} 包含不支持的字段')
+
+    single_configs = options.get('single_card_configs')
+    if single_configs is None:
+        return
+    if not isinstance(single_configs, list):
+        raise ValueError('single_card_configs 必须为数组')
+    for config in single_configs:
+        if not isinstance(config, dict):
+            raise ValueError('single_card_configs 中的配置必须为对象')
+        unsupported = set(config) - (SUPPORTED_CARD_CONFIG_FIELDS | {'card_id'})
+        if unsupported:
+            raise ValueError('single_card_configs 包含不支持的字段')
+
+
+def filter_userdata_payload(userdata_bytes: bytes) -> bytes:
+    """只向第三方库提供无需专用主数据文件的用户数据字段。"""
+    userdata = loads_json(userdata_bytes)
+    if not isinstance(userdata, dict):
+        raise ValueError('用户数据必须为对象')
+    filtered = {
+        key: value
+        for key, value in userdata.items()
+        if key in SUPPORTED_USER_DATA_FIELDS
+    }
+    return dumps_json(filtered, indent=False).encode('utf-8')
+
+
 class Worker:
     def log(self, *args, **kwargs):
         log(f"[worker-{self.worker_id}]", *args, **kwargs)
@@ -96,7 +179,7 @@ class Worker:
                         'userdata_hash': hash,
                     }
             userdata = DeckRecommendUserData()
-            userdata.load_from_bytes(userdata_bytes)
+            userdata.load_from_bytes(filter_userdata_payload(userdata_bytes))
             self.userdata_cache.append((hash, userdata))
             # self.log(f"缓存用户数据: hash={hash}")
             while len(self.userdata_cache) > USERDATA_CACHE_NUM:
@@ -138,6 +221,7 @@ class Worker:
                     'message': '组卡服务端找不到对应的用户数据缓存'
                 }
 
+            validate_options_payload(options)
             options = DeckRecommendOptions.from_dict(options)
             options.user_data = user_data
             self.log(f"组卡任务#{seq}: {self._deckrec_options_to_str(userdata_hash, options)}")
@@ -251,6 +335,3 @@ class WorkerContext:
     async def recommend(self, region: str, options: dict, userdata_hash: str) -> dict:
         self.task_queues[self.worker.worker_id].put(('recommend', (region, options, userdata_hash,), {},))
         return await self._get_result()
-
-
-

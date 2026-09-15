@@ -26,10 +26,6 @@ class PlayerAvatarInfo:
     unit: str
     img: Image.Image
 
-DEFAULT_DATA_MODE = 'latest'
-VALID_DATA_MODES = ['latest', 'default', 'local', 'haruki']
-
-
 @dataclass
 class VerifyCode:
     region: str
@@ -452,7 +448,7 @@ async def verify_user_game_account(ctx: SekaiHandlerContext, triggered_by_not_ve
 编辑后退出名片界面保存，然后在{get_readable_timedelta(VERIFY_CODE_EXPIRE_TIME)}内发送\"/{ctx.region}pjsk验证\"完成验证
 """.strip())
     
-    profile = await get_basic_profile(ctx, info.uid, use_cache=False, use_remote_cache=False)
+    profile = await get_basic_profile(ctx, info.uid, use_cache=False)
     word: str = profile['userProfile'].get('word', '').strip()
 
     assert_and_reply(word.endswith(info.verify_code), f"""
@@ -503,13 +499,13 @@ def process_sensitive_cmd_source(data):
         data['local_source'] = 'sync'
 
 # 根据游戏id获取玩家基本信息
-async def get_basic_profile(ctx: SekaiHandlerContext, uid: int, use_cache=True, use_remote_cache=True, raise_when_no_found=True) -> dict:
+async def get_basic_profile(ctx: SekaiHandlerContext, uid: int, use_cache=True, raise_when_no_found=True) -> dict:
     cache_path = f"{SEKAI_PROFILE_DIR}/profile_cache/{ctx.region}/{uid}.json"
     try:
         region_name = get_region_name(ctx.region)
         url = get_gameapi_config(ctx).profile_api_url
         assert_and_reply(url, f"暂不支持查询{region_name}的玩家信息")
-        profile = await request_gameapi(url.format(uid=uid) + f"?use_cache={use_remote_cache}")
+        profile = await request_gameapi(url.format(uid=uid), authenticated=True)
         if raise_when_no_found:
             assert_and_reply(profile, f"找不到ID为 {uid} 的{region_name}玩家")
         elif not profile:
@@ -560,14 +556,6 @@ async def get_player_avatar_info_by_basic_profile(ctx: SekaiHandlerContext, basi
     unit = await get_unit_by_card_id(ctx, card_id)
     return PlayerAvatarInfo(card_id, cid, unit, avatar_img)
 
-# 查询抓包数据获取模式
-def get_user_data_mode(ctx: SekaiHandlerContext, qid: int) -> str:
-    if ctx.data_mode_arg:
-        assert_and_reply(ctx.data_mode_arg in VALID_DATA_MODES, f"错误的抓包数据获取模式: {ctx.data_mode_arg}")
-        return ctx.data_mode_arg
-    data_modes = profile_db.get("data_modes", {})
-    return data_modes.get(ctx.region, {}).get(str(qid), DEFAULT_DATA_MODE)
-
 # 用户是否隐藏抓包信息
 def is_user_hide_suite(ctx: SekaiHandlerContext, qid: int) -> bool:
     hide_list = profile_db.get("hide_suite_list", {}).get(ctx.region, [])
@@ -591,7 +579,6 @@ async def get_detailed_profile(
     ctx: SekaiHandlerContext, 
     qid: int, 
     raise_exc=False, 
-    mode=None, 
     ignore_hide=False, 
     filter: list[str] | set[str] | None=None,
     strict: bool=True,
@@ -616,24 +603,23 @@ async def get_detailed_profile(
         if not url:
             raise ReplyException(f"暂不支持查询{get_region_name(ctx.region)}的抓包数据")
         
-        # 数据获取模式
-        mode = mode or get_user_data_mode(ctx, qid)
-
         # 尝试下载
         try:   
             url = url.format(uid=uid)
             if filter:
                 url += f"?key={','.join(filter)}"
             profile = await request_gameapi(url)
+            # Toolbox 单字段请求直接返回字段值，统一还原为调用方使用的字段字典。
+            if filter and len(filter) == 1:
+                profile = {next(iter(filter)): profile}
         except HttpError as e:
             logger.info(f"获取 {qid} {ctx.region} {uid} 抓包数据失败: {get_exc_desc(e)}")
             if e.status_code == 404:
-                local_err = e.message.get('local_err', None)
-                haruki_err = e.message.get('haruki_err', None)
-                msg = f"获取你的{get_region_name(ctx.region)}Suite抓包数据失败，发送\"/抓包\"指令可获取帮助\n"
-                if local_err is not None: msg += f"[本地数据] {local_err}\n"
-                if haruki_err is not None: msg += f"[Haruki工具箱] {haruki_err}\n"
-                raise ReplyException(msg.strip())
+                raise ReplyException(
+                    f"未找到可公开读取的{get_region_name(ctx.region)}Suite数据。"
+                    "请在 Haruki 工具箱绑定并验证游戏账号、上传数据，再开启 Suite 公共 API 访问。"
+                    "发送\"/抓包\"可获取帮助。"
+                )
             else:
                 raise e
         except Exception as e:
@@ -644,6 +630,7 @@ async def get_detailed_profile(
             logger.info(f"获取 {qid} {ctx.region} {uid} 抓包数据失败: 找不到该玩家")
             raise ReplyException(f"找不到ID为 {uid} 的玩家")
         
+        profile['source'] = 'haruki'
         # 缓存数据（目前已不缓存）
         cache_path = f"{SEKAI_PROFILE_DIR}/suite_cache/{ctx.region}/{uid}.json"
         # if not upload_time_only:
@@ -692,7 +679,7 @@ async def get_player_avatar_info_by_detailed_profile(ctx: SekaiHandlerContext, d
     return PlayerAvatarInfo(card_id, cid, unit, avatar_img)
 
 # 获取玩家详细信息的简单卡片控件，返回Frame
-async def get_detailed_profile_card(ctx: SekaiHandlerContext, profile: dict, err_msg: str, mode=None) -> Frame:
+async def get_detailed_profile_card(ctx: SekaiHandlerContext, profile: dict, err_msg: str) -> Frame:
     with Frame().set_bg(roundrect_bg()).set_padding(16) as f:
         with HSplit().set_content_align('c').set_item_align('c').set_sep(14):
             if profile:
@@ -706,7 +693,6 @@ async def get_detailed_profile_card(ctx: SekaiHandlerContext, profile: dict, err
                     source = profile.get('source', '?')
                     if local_source := profile.get('local_source'):
                         source += f"({local_source})"
-                    mode = mode or get_user_data_mode(ctx, ctx.user_id)
                     update_time = datetime.fromtimestamp(profile['upload_time'] / 1000)
                     update_time_text = update_time.strftime('%m-%d %H:%M:%S') + f" ({get_readable_datetime(update_time, show_original_time=False)})"
                     user_id = process_hide_uid(ctx, game_data['userId'], keep=6)
@@ -716,7 +702,7 @@ async def get_detailed_profile_card(ctx: SekaiHandlerContext, profile: dict, err
                     )
                     TextBox(f"{ctx.region.upper()}: {user_id} Suite数据", TextStyle(font=DEFAULT_FONT, size=16, color=BLACK))
                     TextBox(f"更新时间: {update_time_text}", TextStyle(font=DEFAULT_FONT, size=16, color=BLACK))
-                    TextBox(f"数据来源: {source}  获取模式: {mode}", TextStyle(font=DEFAULT_FONT, size=16, color=BLACK))
+                    TextBox(f"数据来源: {source}", TextStyle(font=DEFAULT_FONT, size=16, color=BLACK))
             if err_msg:
                 TextBox(f"获取数据失败: {err_msg}", TextStyle(font=DEFAULT_FONT, size=20, color=RED), line_count=3).set_w(300)
     return f
@@ -1199,7 +1185,7 @@ async def _(ctx: SekaiHandlerContext):
             if not validate_uid(region_ctx, args):
                 return region, None, f"ID格式错误"
             checked_regions.append(get_region_name(region))
-            profile = await get_basic_profile(region_ctx, args, use_cache=False, use_remote_cache=False, raise_when_no_found=False)
+            profile = await get_basic_profile(region_ctx, args, use_cache=False, raise_when_no_found=False)
             if not profile:
                 return region, None, "找不到该ID的玩家"
             user_name = profile['user']['name']
@@ -1447,7 +1433,7 @@ async def _(ctx: SekaiHandlerContext):
             break
 
     uid = get_player_bind_id(ctx)
-    profile = await get_basic_profile(ctx, uid, use_cache=True, use_remote_cache=False)
+    profile = await get_basic_profile(ctx, uid, use_cache=True)
     logger.info(f"绘制名片 region={ctx.region} uid={uid}")
     return await ctx.asend_reply_msg(await get_image_cq(
         await compose_profile_image(ctx, profile, vertical=vertical),
@@ -1485,53 +1471,7 @@ async def _(ctx: SekaiHandlerContext):
     except Exception as e:
         logger.print_exc(f"profile查询服务状态异常")
         return await ctx.asend_reply_msg(f"profile查询服务异常: {str(e)}")
-    return await ctx.asend_reply_msg("profile查询服务正常")
-
-
-# 设置抓包数据获取模式
-pjsk_data_mode = SekaiCmdHandler([
-    "/pjsk data mode", 
-    "/pjsk抓包模式", "/pjsk抓包获取模式", "/抓包模式",
-])
-pjsk_data_mode.check_cdrate(cd).check_wblist(gbl)
-@pjsk_data_mode.handle()
-async def _(ctx: SekaiHandlerContext):
-    data_modes = profile_db.get("data_modes", {})
-    cur_mode = data_modes.get(ctx.region, {}).get(str(ctx.user_id), DEFAULT_DATA_MODE)
-    help_text = f"""
-你的{get_region_name(ctx.region)}抓包数据获取模式: {cur_mode} 
----
-使用\"{ctx.original_trigger_cmd} 模式名\"来切换模式，可用模式名如下:
-【latest】
-同时从所有数据源获取，使用最新的一个（推荐）
-【default】
-从本地数据获取失败才尝试从Haruki工具箱获取
-【local】
-仅从本地数据获取
-【haruki】
-仅从Haruki工具箱获取
-""".strip()
-    
-    ats = ctx.get_at_qids()
-    if ats and ats[0] != int(ctx.bot.self_id):
-        # 如果有at则使用at的qid
-        qid = ats[0]
-        assert_and_reply(check_superuser(ctx.event), "只有超级管理能修改别人的模式")
-    else:
-        qid = ctx.user_id
-    
-    args = ctx.get_args().strip().lower()
-    assert_and_reply(args in VALID_DATA_MODES, help_text)
-
-    if ctx.region not in data_modes:
-        data_modes[ctx.region] = {}
-    data_modes[ctx.region][str(qid)] = args
-    profile_db.set("data_modes", data_modes)
-
-    if qid == ctx.user_id:
-        return await ctx.asend_reply_msg(f"切换{get_region_name(ctx.region)}抓包数据获取模式:\n{cur_mode} -> {args}")
-    else:
-        return await ctx.asend_reply_msg(f"切换 {qid} 的{get_region_name(ctx.region)}抓包数据获取模式:\n{cur_mode} -> {args}")
+    return await ctx.asend_reply_msg("游戏 API 后端在线")
 
 
 # 查询抓包数据
@@ -1546,36 +1486,20 @@ async def _(ctx: SekaiHandlerContext):
     qid = int(cqs['at'][0]['qq']) if 'at' in cqs else ctx.user_id
     uid = get_player_bind_id(ctx)
 
-    task1 = get_detailed_profile(ctx, qid, raise_exc=False, mode="local", filter=['upload_time'])
-    task2 = get_detailed_profile(ctx, qid, raise_exc=False, mode="haruki", filter=['upload_time'])
-    (local_profile, local_err), (haruki_profile, haruki_err) = await asyncio.gather(task1, task2)
+    profile, err = await get_detailed_profile(ctx, qid, raise_exc=False, filter=['upload_time'])
 
     msg = f"{process_hide_uid(ctx, uid, keep=6)}({ctx.region.upper()}) Suite数据\n"
 
-    if local_err:
-        local_err = local_err[local_err.find(']')+1:].strip()
-        msg += f"[本地数据]\n获取失败: {local_err}\n"
-    else:
-        msg += "[本地数据]\n"
-        upload_time = datetime.fromtimestamp(local_profile['upload_time'] / 1000)
-        upload_time_text = upload_time.strftime('%m-%d %H:%M:%S') + f"({get_readable_datetime(upload_time, show_original_time=False)})"
-        if local_source := local_profile.get('local_source'):
-            upload_time_text = local_source + " " + upload_time_text
-        msg += f"{upload_time_text}\n"
-
-    if haruki_err:
-        haruki_err = haruki_err[haruki_err.find(']')+1:].strip()
-        msg += f"[Haruki工具箱]\n获取失败: {haruki_err}\n"
+    if err:
+        err = err[err.find(']')+1:].strip()
+        msg += f"[Haruki工具箱]\n获取失败: {err}\n"
     else:
         msg += "[Haruki工具箱]\n"
-        upload_time = datetime.fromtimestamp(haruki_profile['upload_time'] / 1000)
+        upload_time = datetime.fromtimestamp(profile['upload_time'] / 1000)
         upload_time_text = upload_time.strftime('%m-%d %H:%M:%S') + f"({get_readable_datetime(upload_time, show_original_time=False)})"
         msg += f"{upload_time_text}\n"
 
-    mode = get_user_data_mode(ctx, ctx.user_id)
     msg += f"---\n"
-    msg += f"该指令查询Suite数据，查询Mysekai数据请使用\"/{ctx.region}msd\"\n"
-    # msg += f"数据获取模式: {mode}，使用\"/{ctx.region}抓包模式\"来切换模式\n"
     msg += f"发送\"/抓包\"获取抓包教程"
 
     return await ctx.asend_reply_msg(msg)
@@ -1834,9 +1758,8 @@ async def _(ctx: HandlerContext):
     if '详细' in args or 'detail' in args:
         detail_mode = True
     bind_list: Dict[str, Dict[str, str]] = profile_db.get("bind_list", {})
-    suite_total, mysekai_total, qid_set = 0, 0, set()
+    suite_total, qid_set = 0, set()
     suite_source_total: dict[str, int] = {}
-    mysekai_source_total: dict[str, int] = {}
 
     msg = "所有群聊统计:\n" if not group_mode else "当前群聊统计:\n"
     group_qids = set([str(m['user_id']) for m in await get_group_users(ctx.bot, ctx.group_id)])
@@ -1856,39 +1779,25 @@ async def _(ctx: HandlerContext):
             suites = [s for s in suites if s.split('/')[-1].split('.')[0] in uids]
         suite_total += len(suites)
 
-        mysekais = glob.glob(config.get("mysekai_path").format(region=region))
-        if group_mode:
-            mysekais = [m for m in mysekais if m.split('/')[-1].split('.')[0] in uids]
-        mysekai_total += len(mysekais)
-
-        msg += f"【{get_region_name(region)}】\n绑定 {len(qids)} | Suite {len(suites)} | MySekai {len(mysekais)}\n"
+        msg += f"【{get_region_name(region)}】\n绑定 {len(qids)} | Suite {len(suites)}\n"
 
         if detail_mode:
             suite_source_num: dict[str, int] = {}
-            mysekai_source_num: dict[str, int] = {}
             def get_detail():
                 for p in suites:
                     local_source = load_json_zstd(p).get('local_source', '未知')
                     suite_source_num[local_source] = suite_source_num.get(local_source, 0) + 1
                 for k, v in suite_source_num.items():
                     suite_source_total[k] = suite_source_total.get(k, 0) + v
-                for p in mysekais:
-                    local_source = load_json_zstd(p).get('local_source', '未知')
-                    mysekai_source_num[local_source] = mysekai_source_num.get(local_source, 0) + 1
-                for k, v in mysekai_source_num.items():
-                    mysekai_source_total[k] = mysekai_source_total.get(k, 0) + v
             await run_in_pool(get_detail)
             msg += "Suite来源: " + " | ".join([f"{k} {v}" for k, v in suite_source_num.items()]) + "\n"
-            msg += "MySekai来源: " + " | ".join([f"{k} {v}" for k, v in mysekai_source_num.items()]) + "\n"
 
 
-    msg += f"---\n【总计】\n绑定 {len(qid_set)} | Suite {suite_total} | MySekai {mysekai_total}"
+    msg += f"---\n【总计】\n绑定 {len(qid_set)} | Suite {suite_total}"
     if detail_mode:
         msg += "\nSuite来源: " + " | ".join([f"{k} {v}" for k, v in suite_source_total.items()])
-        msg += "\nMySekai来源: " + " | ".join([f"{k} {v}" for k, v in mysekai_source_total.items()])
 
     return await ctx.asend_fold_msg_adaptive(msg.strip())
-
 
 # 查询绑定历史
 pjsk_bind_history = CmdHandler([
@@ -1967,22 +1876,3 @@ async def _(ctx: HandlerContext):
             msg += "无\n"
 
     return await ctx.asend_fold_msg_adaptive(msg.strip())
-
-
-# 创建游客账号
-pjsk_create_guest_account = SekaiCmdHandler([
-    "/pjsk create guest", "/pjsk register", "/pjsk注册",
-], regions=['jp', 'en'], disabled=not config.get('features.create_account', True))
-guest_account_create_rate_limit = RateLimit(file_db, logger, 2, 'd', rate_limit_name='注册游客账号')
-pjsk_create_guest_account.check_cdrate(cd).check_wblist(gbl).check_cdrate(guest_account_create_rate_limit)
-@pjsk_create_guest_account.handle()
-async def _(ctx: SekaiHandlerContext):
-    region_name = get_region_name(ctx.region)
-    url = get_gameapi_config(ctx).create_account_api_url
-    assert_and_reply(url, f"不支持注册{region_name}帐号")
-    data = await request_gameapi(url, method="POST")
-    return await ctx.asend_fold_msg([
-        f"注册{region_name}帐号成功，引继码和引继密码如下，登陆后请及时重新生成引继码",
-        data['inherit_id'],
-        data['inherit_pw'],
-    ])

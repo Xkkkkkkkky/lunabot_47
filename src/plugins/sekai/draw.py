@@ -84,22 +84,14 @@ def roundrect_bg(
     return RoundRectBg(fill, radius, blurglass=blurglass, blurglass_kwargs=blurglass_kwargs)
 
 
-COMMON_BG_NAMES = [
-    "bg/title_background.png",
-    "bg/bg_area_1.png",
-    "bg/bg_area_2.png",
-    "bg/bg_area_3.png",
-    "bg/bg_area_4.png",
-    "bg/bg_area_11.png",
-    "bg/bg_area_12.png",
-    "bg/bg_area_13.png",
-]
+# 使用已部署的标题及团体背景，避免随机选中未提供的旧区域背景。
+COMMON_BG_NAMES = ["bg/title_background.png"]
 GROUP_BG_NAMES = {
-    UNIT_LN:   ["bg/bg_area_5.png",  "bg/bg_area_17.png", "bg/bg_light_sound.png"],
-    UNIT_MMJ:  ["bg/bg_area_7.png",  "bg/bg_area_18.png", "bg/bg_idol.png"],
-    UNIT_VBS:  ["bg/bg_area_8.png",  "bg/bg_area_19.png", "bg/bg_street.png"],
-    UNIT_WS:   ["bg/bg_area_9.png",  "bg/bg_area_20.png", "bg/bg_theme_park.png"],
-    UNIT_25:   ["bg/bg_area_10.png", "bg/bg_area_21.png", "bg/bg_school_refusal.png"],
+    UNIT_LN:   ["bg/bg_light_sound.png"],
+    UNIT_MMJ:  ["bg/bg_idol.png"],
+    UNIT_VBS:  ["bg/bg_street.png"],
+    UNIT_WS:   ["bg/bg_theme_park.png"],
+    UNIT_25:   ["bg/bg_school_refusal.png"],
     UNIT_VS:   ["bg/bg_virtual_singer.png"]
 }
 
@@ -160,4 +152,3 @@ PLAY_RESULT_COLORS = {
     'fc': (253, 167, 249, 255),
     'ap': (63, 230, 228, 255),
 }
-

@@ -1,1 +1,1 @@
-抓包教程: https://xxx/tutorial.html
+请在 config/sekai/upload_help.txt 填写经核实的抓包教程与账号授权说明。

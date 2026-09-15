@@ -254,9 +254,14 @@ async def get_latest_ranking(ctx: SekaiHandlerContext, event_id: int, query_rank
         latest_rankings_mtime.setdefault(ctx.region, {})[event_id] = db_mtime
         return [r for r in rankings if r.rank in query_ranks]
     # 从API获取
-    url = get_gameapi_config(ctx).ranking_api_url
-    assert_and_reply(url, f"暂不支持获取{ctx.region}榜线数据")
-    data = await request_gameapi(url.format(event_id=event_id % 1000))
+    api = get_gameapi_config(ctx)
+    assert_and_reply(api.ranking_top100_api_url and api.ranking_border_api_url, f"暂不支持获取{ctx.region}榜线数据")
+    # 官方接口分别提供 Top100 与档线，在这里合并为现有绘图使用的数据结构。
+    top100, border = await asyncio.gather(*[
+        request_gameapi(url.format(event_id=event_id % 1000), authenticated=True)
+        for url in (api.ranking_top100_api_url, api.ranking_border_api_url)
+    ])
+    data = {'top100': top100, 'border': border}
     assert_and_reply(data, "获取榜线数据失败")
     logger.info(f"从API获取 {ctx.region}_{event_id} 最新榜线数据")
     return [r for r in await parse_rankings(ctx, event_id, data) if r.rank in query_ranks]
@@ -1343,7 +1348,7 @@ async def compose_rank_trace_image(ctx: SekaiHandlerContext, rank: int, event: d
 # 获取胜率预测数据
 async def get_winrate_predict_data(ctx: SekaiHandlerContext):
     assert ctx.region == 'jp', "5v5胜率预测仅支持日服"
-    data = await download_json("https://sekai-data.3-3.dev/cheerful_predict.json")
+    data = await download_json(config.get("sk.cheerful_predict_url"))
     try:
         event_id = data['eventId']
         predict_time = datetime.fromtimestamp(data['timestamp'] / 1000)

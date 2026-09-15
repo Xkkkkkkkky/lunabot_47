@@ -2,7 +2,7 @@ from ..record.sql import query_recent_msg
 from ..record import before_record_hook
 from ..utils import *
 from ..utils.rpc import *
-from ..llm import ChatSession, ChatSessionResponse, get_text_embedding, download_image_to_b64
+from ..llm import ChatSession, ChatSessionResponse, download_image_to_b64
 
 config = Config('chat.autochat')
 logger = get_logger("Chat")
@@ -157,13 +157,6 @@ async def handle_query_llm(cid: str, model: str | list[str], text: str, images: 
         timeout=timeout,
         max_tokens=max_tokens,
     )
-
-# 请求获取文本嵌入
-@rpc_method(RPC_SERVICE, 'query_embedding')
-async def handle_query_embedding(cid: str, texts: list[str], model_name: str):
-    logger.info(f"自动聊天RPC客户端 {cid} 请求 {len(texts)} 条文本嵌入")
-    embeddings = await get_text_embedding(texts, model_name)
-    return embeddings
 
 # 获取新消息，获取后清空
 @rpc_method(RPC_SERVICE, 'get_new_msgs')

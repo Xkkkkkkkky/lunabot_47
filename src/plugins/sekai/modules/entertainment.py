@@ -417,7 +417,6 @@ def get_guess_music_check_fn(guess_type: str):
             MusicSearchOptions(
                 use_id=False,
                 use_nidx=False,
-                use_emb=False, 
                 raise_when_err=False, 
                 verbose=False
             ))

@@ -4,10 +4,8 @@ from ..common import *
 from ..handler import *
 from ..asset import *
 from ..draw import *
-from ..gameapi import get_gameapi_config, request_gameapi
 from .profile import (
     get_card_full_thumbnail, 
-    get_player_bind_id,
     get_detailed_profile,
     get_detailed_profile_card,
     get_detailed_profile_card_filter,
@@ -522,7 +520,7 @@ async def compose_event_story_summary_msg_list(
         chara_talk_count_text += f"{name}: {count}\n"
     msg_lists.append(chara_talk_count_text.strip())
 
-    additional_info = "以上内容由LunaBot生成\n请勿转载\n"
+    additional_info = "以上内容由LunaBot_47生成\n请勿转载\n"
     for phase in ['start', *[f'ep{i}' for i in range(1, len(eps) + 1)], 'end']:
         phase_info = summary.get(f'{phase}_additional_info', '')
         if phase_info:
@@ -790,24 +788,6 @@ async def get_event_story_summary(ctx: SekaiHandlerContext, event: dict, refresh
             eps, no_snippet_eps, 
             summary, chara_talk_count
         )
-
-# 5v5自动送火
-async def send_boost(ctx: SekaiHandlerContext, qid: int) -> str:
-    uid = get_player_bind_id(ctx)
-    event = await get_current_event(ctx)
-    assert_and_reply(event and event['eventType'] == 'cheerful_carnival', "当前没有进行中的5v5活动")
-    url = get_gameapi_config(ctx).send_boost_api_url
-    assert_and_reply(url, "该区服不支持自动送火")
-    result = await request_gameapi(url.format(uid=uid), method='POST')
-    ok_times = result['ok_times']
-    failed_reason = result.get('failed_reason', '未知错误')
-    ret_msg = f"成功送火{ok_times}次"
-    if ok_times < 3:
-        if 'opponent_user_receivable_count_max' in failed_reason:
-            ret_msg += f"（达到送火上限）"
-        else:
-            ret_msg += f"，失败{3-ok_times}次，错误信息: \n{failed_reason}"
-    return ret_msg
 
 # 合成活动详情图片
 async def compose_event_detail_image(ctx: SekaiHandlerContext, event: dict) -> Image.Image:
@@ -1136,17 +1116,6 @@ async def _(ctx: SekaiHandlerContext):
         return await ctx.asend_reply_msg(await get_image_cq(resp, low_quality=True))
     else:
         return await ctx.asend_fold_msg(resp)
-
-
-# 5v5自动送火
-pjsk_send_boost = SekaiCmdHandler([
-    "/pjsk send boost", "/pjsk_send_boost", "/pjsk grant boost", "/pjsk_grant_boost",
-    "/自动送火", "/送火",
-], regions=['jp'], disabled=not config.get('features.send_boost', True))
-pjsk_send_boost.check_cdrate(cd).check_wblist(gbl)
-@pjsk_send_boost.handle()
-async def _(ctx: SekaiHandlerContext):
-    return await ctx.asend_reply_msg(await send_boost(ctx, ctx.user_id))
 
 
 # 活动记录

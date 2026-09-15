@@ -1,6 +1,10 @@
-# PJsk 总开关。关闭后不导入 sekai.modules，但通用绘图素材仍可由其他模块使用。
+# PJSK 总开关。关闭后不加载插件后台任务，独立组卡及榜线服务也拒绝启动；修改后需重启相关进程。
 enabled: false
-debug: false
+
+# 榜线查询/预测与独立榜线记录服务，需同时开启总开关。
+ranking_enabled: false
+# 组卡与控分模块指令、组卡数据同步和独立组卡后端，需同时开启总开关。
+deck_enabled: false
 
 # enabled=false 时不使用；若以后重新开启，默认只启用日服以满足源码校验。
 region_enabled:
@@ -10,7 +14,8 @@ region_enabled:
   kr: false
   cn: false
 
-gameapi_token: xxx
+# 游戏 API 令牌仅填写在真实 config 中。
+gameapi_token: ""
 
 fifth_anniv_regions: ["jp"]
 
@@ -50,7 +55,6 @@ profile:
     progressive: true
 
 suite_path: data/sekai/user_data/{region}/suite/*
-mysekai_path: data/sekai/user_data/{region}/mysekai/*
 
 story_summary:
   output_as_image: true
@@ -80,13 +84,11 @@ stamp:
       第二张图片仅用于被文字遮挡部分的角色外观的参考，但仍然需要优先保留第一张图片的外观
 
 deck:
-  servers:
-    - url: http://127.0.0.1:12345
-      weight: 4 # 负载均衡权重
-    - url: http://127.0.0.1:45678
-      weight: 8
+  # 请在真实 config 中填写牌组推荐服务地址。
+  servers: []
 
-  music_meta_url: https://storage.sekai.best/sekai-best-assets/music_metas.json
+  # 请在真实 config 中填写歌曲元数据地址。
+  music_meta_url: ""
   data_update_interval_seconds: 30
   default_algs: ['dfs', 'ga']
 
@@ -146,43 +148,10 @@ gacha:
     rarity_birthday: 100
     pickup: 100
 
-mysekai:
-  msr_push_interval_seconds: 3
-  msr_push_concurrency: 4
-
-  map_image_scale: 0.75
-  map_brightness: 1.0
-  rare_res_light:
-    map_brightness_effect: 0.5
-    large_size: 7.0
-    small_size: 5.0
-
-  rare_res_keys:
-    1: 
-      - mysekai_material_32
-      - mysekai_material_33
-      - mysekai_material_34
-      - mysekai_material_61
-      - mysekai_material_64
-      - mysekai_material_65
-      - mysekai_material_66
-      - mysekai_material_93
-      - mysekai_material_94
-      - mysekai_music_record_0~9999
-    2:
-      - mysekai_material_5
-      - mysekai_material_12
-      - mysekai_material_20
-      - mysekai_material_24
-      - mysekai_fixture_121
-      - material_17
-      - material_170
-      - material_173
-      - mysekai_material_67~92
-      - material_174~203
-
 sk:
   record_interval_seconds: 60
+  # 请在真实 config 中填写 5v5 胜率预测数据地址。
+  cheerful_predict_url: ""
   high_res_record:  # 高精度榜线记录
     interval_seconds: 10
     ranks:  # 应用高精度的排名档位范围
@@ -194,7 +163,6 @@ sk:
   plot_point_num_limit: 5000
 
   record_time_after_event_end_minutes: 0
-  update_ranking_log_interval: 30
   csb_judge_stop_threshold_minutes: 5
   
   backup:
@@ -222,34 +190,37 @@ sk:
 
     33kit:
       name: "33Kit预测"
-      enabled: true
+      enabled: false
       regions: ["jp"]
       support_wl: false
       show_history: true
       update_interval_minutes: 20
       error_retry_minutes: 10
-      url: https://sekai-data.3-3.dev/predict.json
+      # 请在真实 config 中填写预测数据地址。
+      url: ""
 
     snowy:
       name: "SnowyBot预测"
-      enabled: true
+      enabled: false
       regions: ['jp', 'cn']
       support_wl: false
       show_history: true
       update_interval_minutes: 10
       error_retry_minutes: 10
-      url: https://sekaibangdan.exmeaning.com/api/public/v1/{region}data/{event_id}
+      # 请在真实 config 中填写预测数据地址。
+      url: ""
       ranks: [10, 30, 50, 100, 200, 300, 500, 1000, 2000, 3000, 5000, 10000, 50000, 100000]
 
     sekarun:
       name: "SekaRun预测"
-      enabled: true
+      enabled: false
       regions: ['jp', 'en', 'tw', 'kr']
       support_wl: false
       show_history: true
       update_interval_minutes: 10
       error_retry_minutes: 10
-      url: https://jiiku831.github.io/{region}data/sekarun.js
+      # 请在真实 config 中填写预测数据地址。
+      url: ""
       ranks: [10, 30, 50, 100, 200, 300, 500, 1000, 2000, 3000, 5000, 10000, 50000, 100000]
   
 chart:
@@ -258,6 +229,9 @@ chart:
   max_resolution: [4096, 4096]
 
 music:
+  # 请在真实 config 中填写以下资源地址。
+  cn_titles_url: ""
+  en_titles_url: ""
   constant:
     enabled: true # 禁用后使用相关功能会直接提示不可用
     csv_path: ""  # 歌曲定数csv路径，需包含 id,difficulty,constant 三列

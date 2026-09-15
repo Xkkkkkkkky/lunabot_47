@@ -1,16 +1,20 @@
 from utils import *
 
-CONFIG = {}
-CONFIG_PATH = pjoin(os.path.dirname(os.path.abspath(__file__)), 'config.yaml')
-if os.path.exists(CONFIG_PATH):
-    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-        CONFIG = yaml.safe_load(f)
-else:
-    log(f"未找到配置文件 {CONFIG_PATH}，使用默认配置")
 
-HOST = CONFIG.get('host', '127.0.0.1')
-PORT = CONFIG.get('port', 45556)
-WORKER_NUM = CONFIG.get('worker_num', 1)
-DATA_DIR = CONFIG.get('data_dir', 'lunabot_deckrec_data')
-USERDATA_CACHE_NUM = CONFIG.get('userdata_cache_num', 10)
+# 统一从仓库根目录定位配置和数据，避免从不同工作目录启动时写错位置。
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+with open(pjoin(PROJECT_ROOT, 'config', 'sekai', 'sekai.yaml'), 'r', encoding='utf-8') as f:
+    sekai_config = yaml.safe_load(f) or {}
+    SEKAI_ENABLED = sekai_config.get('enabled', False)
+    DECK_ENABLED = sekai_config.get('deck_enabled', False)
+
+CONFIG_PATH = pjoin(PROJECT_ROOT, 'config', 'sekai', 'deck_recommender.yaml')
+with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+    CONFIG = yaml.safe_load(f) or {}
+
+HOST = CONFIG['host']
+PORT = int(CONFIG['port'])
+WORKER_NUM = int(CONFIG['worker_num'])
+USERDATA_CACHE_NUM = int(CONFIG['userdata_cache_num'])
+DATA_DIR = pjoin(PROJECT_ROOT, CONFIG['data_dir'])
 DB_PATH = pjoin(DATA_DIR, 'deckrec.json')

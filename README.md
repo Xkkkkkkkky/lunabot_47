@@ -74,4 +74,4 @@ Keep `mode: "file"` to use the original image delivery method.
 3. ~~查鸟（lunabot）~~
 4. ~~llm chat/summary~~
 5. ~~nsy 别名/图库~~
-6. gbfr 查输出
+6. ~~gbfr 查输出~~

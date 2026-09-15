@@ -1,15 +1,15 @@
 # 日服
 jp:
-  profile_api_url:                "https://xxx/api/jp/user/{uid}/profile"       # 游戏API: 获取用户profile
-  suite_api_url:                  "https://xxx/api/jp/user/{uid}/suite"         # 游戏API: 获取用户suite
-  mysekai_api_url:                "https://xxx/api/jp/user/{uid}/mysekai"       # 游戏API: 获取用户mysekai
-  mysekai_photo_api_url:          "https://xxx/api/jp/mysekai/photo"            # 游戏API: 获取用户ms照片
-  ranking_api_url:                "https://xxx/api/jp/event/{event_id}/ranking" # 游戏API: 获取活动排名
-  send_boost_api_url:             "https://xxx/api/jp/user/{uid}/send_boost"    # 游戏API: 送火
-  create_account_api_url:         "https://xxx/api/jp/create_account"           # 游戏API: 创建账号
+  # 游戏 API 地址仅填写在真实 config 中，示例不携带占位网址。
+  profile_api_url:                ""  # 游戏API: 获取用户profile
+  suite_api_url:                  ""  # 游戏API: 获取用户suite
+  ranking_top100_api_url:         ""  # Haruki 游戏API: 活动 Top100
+  ranking_border_api_url:         ""  # Haruki 游戏API: 活动档线
   
-  # suite和mysekai数据需要包含upload_time字段，内容为单位为秒的时间戳
-  # 目前使用到的suite数据字段：'userCards','userDecks','userGamedata','userMusics','userMusicResults','userMysekaiMaterials','userAreas','userChallengeLiveSoloDecks','userCharacters','userMysekaiCanvases','userMysekaiFixtureGameCharacterPerformanceBonuses','userMysekaiGates','userWorldBloomSupportDecks','userHonors','userMysekaiCharacterTalks','userChallengeLiveSoloResults','userChallengeLiveSoloStages','userChallengeLiveSoloHighScoreRewards','userEvents','userWorldBlooms','userMusicAchievements','userPlayerFrames','userMaterials','upload_time',
+  # profile/榜线使用 sekai.yaml 中的 gameapi_token，通过 X-Haruki-Sekai-Token 认证。
+  # Toolbox 公共 suite 不携带令牌，需要用户自行开启公共 API 访问。
+  # suite数据需要包含upload_time字段，内容为单位为毫秒的时间戳。
+  # 目前使用到的suite数据字段：'userCards','userDecks','userGamedata','userMusics','userMusicResults','userAreas','userChallengeLiveSoloDecks','userCharacters','userMysekaiFixtureGameCharacterPerformanceBonuses','userWorldBloomSupportDecks','userHonors','userChallengeLiveSoloResults','userChallengeLiveSoloStages','userChallengeLiveSoloHighScoreRewards','userEvents','userWorldBlooms','userMusicAchievements','userPlayerFrames','userMaterials','upload_time',
   # 字节服suite数据中的compact格式字段需要处理为日服同格式
 
 # 台服（繁中）

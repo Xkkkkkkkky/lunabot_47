@@ -1,7 +1,8 @@
-url: https://xxx/alias/v1/music/{mid} # 歌曲别名更新API
+# 歌曲别名更新 API 地址仅填写在真实 config 中。
+url: ""
 
-regions:
-  - "jp"
+# 未配置地址时不启用同步区域。
+regions: []
 sync_times:
   - ["*/6", "0", "0"]
 

@@ -1,3 +1,10 @@
+from config import *
+
+# 在导入计算引擎和创建 worker 前检查总开关与组卡开关。
+if not (SEKAI_ENABLED and DECK_ENABLED):
+    print("PJSK 组卡服务未启用，组卡后端不会启动")
+    raise SystemExit(0)
+
 from hashlib import md5
 from fastapi import FastAPI, HTTPException, Request, Response
 import uvicorn
@@ -11,7 +18,6 @@ from sekai_deck_recommend_cpp import (
 )
 from utils import *
 from worker import *
-from config import *
 
 try:
     import uvloop

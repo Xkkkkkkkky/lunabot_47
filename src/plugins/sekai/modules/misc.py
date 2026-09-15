@@ -4,13 +4,10 @@ from ..common import *
 from ..handler import *
 from ..asset import *
 from ..draw import *
-from ..sub import SekaiGroupSubHelper, SekaiUserSubHelper
+from ..sub import SekaiGroupSubHelper
 from .card_extractor import CardExtractor, CardExtractResult, CardThumbnail
-from ..gameapi import get_gameapi_config, request_gameapi
 from .profile import (
     get_card_full_thumbnail, 
-    get_player_bind_id,
-    get_player_bind_count,
     process_hide_uid,
 )
 from .card import (
@@ -24,8 +21,6 @@ from .card import (
 
 
 md_update_group_sub = SekaiGroupSubHelper("update", "MasterData更新通知", ENABLED_SERVER_REGIONS)
-AD_RESULT_ENABLED = config.get('features.ad_result', True)
-ad_result_sub = SekaiUserSubHelper("ad", "广告奖励推送", ['jp'] if AD_RESULT_ENABLED else [], hide=True)
 
 
 # ======================= 指令处理 ======================= #
@@ -342,89 +337,3 @@ async def send_masterdata_update_notify(
         except Exception as e:
             logger.print_exc(f"在群聊发送 {group_id} 发送 {region} MasterData更新通知失败")
             continue
-
-
-# 广告奖励推送
-@repeat_with_interval(5, '广告奖励推送', logger)
-async def msr_auto_push():
-    if not AD_RESULT_ENABLED:
-        return
-    for region in ENABLED_SERVER_REGIONS:
-        region_name = get_region_name(region)
-        ctx = SekaiHandlerContext.from_region(region)
-
-        update_time_url = get_gameapi_config(ctx).ad_result_update_time_api_url
-        result_url = get_gameapi_config(ctx).ad_result_api_url
-        if not update_time_url or not result_url: continue
-        if region not in ad_result_sub.regions: continue
-
-        # 获取订阅的用户列表
-        qids = list(set([qid for qid, gid in ad_result_sub.get_all_gid_uid(region)]))
-        uids = set()
-        for qid in qids:
-            for i in range(get_player_bind_count(ctx, qid)):
-                try:
-                    if uid := get_player_bind_id(ctx, qid, index=i):
-                        uids.add(uid)
-                except:
-                    pass
-        if not uids: continue
-
-        # 获取广告奖励更新时间
-        try:
-            update_times = await request_gameapi(update_time_url)
-        except Exception as e:
-            logger.warning(f"获取{region_name}广告奖励更新时间失败: {get_exc_desc(e)}")
-            continue
-
-        need_push_uids = [] # 需要推送的uid（没有距离太久的）
-        for uid in uids:
-            update_ts = update_times.get(uid, 0)
-            if datetime.now() - datetime.fromtimestamp(update_ts) < timedelta(minutes=10):
-                need_push_uids.append(uid)
-
-        tasks = []
-                
-        for qid, gid in ad_result_sub.get_all_gid_uid(region):
-            if check_in_blacklist(qid): continue
-            if not gbl.check_id(gid): continue
-
-            for i in range(get_player_bind_count(ctx, qid)):
-                ad_result_pushed_time = file_db.get(f"{region}_ad_result_pushed_time", {})
-
-                uid = get_player_bind_id(ctx, qid, index=i)
-                if not uid or uid not in need_push_uids:
-                    continue
-
-                # 检查这个uid-qid是否已经推送过
-                update_ts = int(update_times.get(uid, 0))
-                key = f"{uid}-{qid}"
-                if key in ad_result_pushed_time:
-                    last_push_ts = int(ad_result_pushed_time.get(key, 0))
-                    if last_push_ts >= update_ts:
-                        continue
-                ad_result_pushed_time[key] = update_ts
-                file_db.set(f"{region}_ad_result_pushed_time", ad_result_pushed_time)
-                
-                tasks.append((gid, qid, uid))
-
-        async def push(task):
-            gid, qid, uid = task
-            try:
-                logger.info(f"在 {gid} 中自动推送用户 {qid} 的广告奖励")
-
-                res = await request_gameapi(result_url.format(uid=uid))
-                if not res.get('results'):
-                    return
-                
-                msg = f"[CQ:at,qq={qid}]的{region_name}广告奖励\n"
-                msg += f"{datetime.fromtimestamp(res['time']).strftime('%Y-%m-%d %H:%M:%S')}\n"
-                msg += "\n".join(res['results'])
-
-                await send_group_msg_by_bot(gid, msg.strip())
-            except Exception as e:
-                logger.print_exc(f'在 {gid} 中自动推送用户 {qid} 的{region_name}广告奖励失败')
-                try: await send_group_msg_by_bot(gid, f"自动推送用户 [CQ:at,qq={qid}] 的{region_name}广告奖励失败: {get_exc_desc(e)}")
-                except: pass
-
-        await batch_gather(*[push(task) for task in tasks])

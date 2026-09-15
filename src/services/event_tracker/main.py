@@ -1,4 +1,10 @@
 from .utils import *
+
+# 关闭时入口直接退出，不加载数据库或创建榜线记录任务。
+if __name__ == "__main__" and not (config.get('enabled', False) and config.get('ranking_enabled', False)):
+    print("PJSK 榜线服务未启用，事件榜线服务不会启动")
+    raise SystemExit(0)
+
 from .master import MasterDataManager
 from .gameapi import get_gameapi_config, request_gameapi, close_session
 from .sql import insert_rankings, Ranking, close_conn
@@ -142,14 +148,29 @@ class EventTracker:
 
 
     @retry(wait=wait_fixed(3), stop=stop_after_attempt(3), reraise=True)
-    async def request_rankings(self, eid: int, url: str) -> tuple[dict, float]:
+    async def request_rankings(
+        self,
+        eid: int,
+        top100_url: str,
+        border_url: str,
+    ) -> tuple[dict, float]:
         """
-        请求榜线数据，返回 (数据，耗时)
+        并行请求官方 Top100 与 Border 端点，返回合并数据和耗时。
         """
         try:
             t = datetime.now().timestamp()
-            data = await request_gameapi(url.format(event_id=eid))
-            return (data, datetime.now().timestamp() - t)
+            api_event_id = eid % 1000
+            top100, border = await asyncio.gather(
+                request_gameapi(
+                    top100_url.format(event_id=api_event_id),
+                    authenticated=True,
+                ),
+                request_gameapi(
+                    border_url.format(event_id=api_event_id),
+                    authenticated=True,
+                ),
+            )
+            return ({'top100': top100, 'border': border}, datetime.now().timestamp() - t)
         except Exception:
             self.error(f"请求榜线数据失败")
             return (None, datetime.now().timestamp() - t)
@@ -207,8 +228,11 @@ class EventTracker:
         """更新一次指定服务器的榜线数据，返回结果信息"""
         ret = { 'request_time': 0, 'inserts': [] }
         region = self.region
-        url = get_gameapi_config(region).ranking_api_url
-        if not url:
+        api = get_gameapi_config(region)
+        if not api.ranking_top100_api_url or not api.ranking_border_api_url:
+            return ret
+        if not str(config.get('gameapi_token', '') or '').strip():
+            self.warning("未配置 Haruki 游戏 API 令牌，跳过榜线记录")
             return ret
             
         # 获取当前运行中的活动
@@ -231,7 +255,11 @@ class EventTracker:
                 latest_rankings_cache[region].pop(key)
                 self.info(f"清除非当前活动 {key} 的榜线缓存数据")
 
-        data, request_time = await self.request_rankings(event_id, url)
+        data, request_time = await self.request_rankings(
+            event_id,
+            api.ranking_top100_api_url,
+            api.ranking_border_api_url,
+        )
         ret['request_time'] = request_time
 
         if not data:
@@ -301,6 +329,12 @@ class EventTracker:
 
 
 async def main():
+    if not (config.get('enabled', False) and config.get('ranking_enabled', False)):
+        warning("PJSK 榜线服务未启用，事件榜线服务不会开始记录")
+        return
+    if not str(config.get('gameapi_token', '') or '').strip():
+        warning("未配置 Haruki 游戏 API 令牌，事件榜线服务不会开始记录")
+        return
     trackers = { region: EventTracker(region) for region in ENABLED_SERVER_REGIONS }
     tasks = []
     for region in ENABLED_SERVER_REGIONS:

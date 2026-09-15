@@ -20,6 +20,7 @@ aiorpcx
 imageio[ffmpeg]
 pilmoji[requests]
 zhon
+zhconv
 orjson
 tencentcloud-sdk-python
 ffmpeg-python
