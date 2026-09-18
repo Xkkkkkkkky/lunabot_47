@@ -58,16 +58,19 @@ async def record_message(bot: Bot, event: GroupMessageEvent):
         return
     
     message_id_set.add(event.message_id)
+    silent = is_group_msg(event) and check_group_silent(event.group_id)
 
     with ProfileTimer("record.total"):
-        with ProfileTimer("record.hooks.before"):
-            before_hook_tasks = []
-            for hook in before_record_hook_funcs:
-                async def run_before_hook(hook, bot, event):
-                    try: await hook(bot, event)
-                    except: logger.print_exc(f"记录消息前hook {hook.__name__} 执行失败")
-                before_hook_tasks.append(run_before_hook(hook, bot, event))
-            await asyncio.gather(*before_hook_tasks)
+        # 静默群只记录消息，不触发自动聊天、娱乐游戏等记录钩子。
+        if not silent:
+            with ProfileTimer("record.hooks.before"):
+                before_hook_tasks = []
+                for hook in before_record_hook_funcs:
+                    async def run_before_hook(hook, bot, event):
+                        try: await hook(bot, event)
+                        except: logger.print_exc(f"记录消息前hook {hook.__name__} 执行失败")
+                    before_hook_tasks.append(run_before_hook(hook, bot, event))
+                await asyncio.gather(*before_hook_tasks)
 
         if record_msg_gbl.check(event, allow_super=False) or event.user_id == event.self_id:
             with ProfileTimer("record.format_msg"):
@@ -109,11 +112,12 @@ async def record_message(bot: Bot, event: GroupMessageEvent):
                     msg=msg,
                 ))
 
-        for hook in after_record_hook_funcs:
-            async def run_after_hook(hook, bot, event):
-                try: await hook(bot, event)
-                except: logger.print_exc(f"记录消息后hook {hook.__name__} 执行失败")
-            asyncio.create_task(run_after_hook(hook, bot, event))
+        if not silent:
+            for hook in after_record_hook_funcs:
+                async def run_after_hook(hook, bot, event):
+                    try: await hook(bot, event)
+                    except: logger.print_exc(f"记录消息后hook {hook.__name__} 执行失败")
+                asyncio.create_task(run_after_hook(hook, bot, event))
 
 # 插入数据库消息定时任务
 @repeat_with_interval(config.item('insert_msg_loop_interval_seconds'), '插入消息到数据库', logger)
@@ -128,6 +132,7 @@ async def insert_msg_task():
 
 # 记录消息
 add = on_message(block=False, priority=-1)
+SILENT_ALLOWED_MATCHERS.add(add)
 @add.handle()
 async def _(bot: Bot, event: MessageEvent):
     if not gwl.check(event, allow_private=True, allow_super=False): return
@@ -222,6 +227,7 @@ async def private_forward_hook(bot: Bot, event: MessageEvent):
 
 # log各种事件消息
 misc_notice_log = on_notice(block=False)
+SILENT_ALLOWED_MATCHERS.add(misc_notice_log)
 @misc_notice_log.handle()
 async def _(bot: Bot, event: NoticeEvent):
     # 群消息撤回

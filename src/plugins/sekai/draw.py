@@ -54,10 +54,8 @@ def get_attr_icon(attr: str, size: int = None):
     return img
 
 
-SEKAI_BLUE_BG = RandomTriangleBg("sekai.bg_preset.blue")
-SEKAI_RED_BG = RandomTriangleBg("sekai.bg_preset.red")
-SEKAI_BLUE_BG_DAY   = RandomTriangleBg("sekai.bg_preset.blue", dt = datetime.strptime("10:00", "%H:%M"))
-SEKAI_BLUE_BG_NIGHT = RandomTriangleBg("sekai.bg_preset.blue", dt = datetime.strptime("22:00", "%H:%M"))
+# 无专用图片背景的绘图使用通用报告背景；有图片的功能仍传入原 ImageBg。
+SEKAI_BLUE_BG = default_page_background(resolve_draw_theme(config))
 
 BG_PADDING = 20
 WIDGET_BG_COLOR_CFG = config.item("draw.widget_bg_color")
@@ -70,7 +68,7 @@ def roundrect_bg(
     radius: int | ConfigItem=WIDGET_BG_RADIUS_CFG, 
     alpha: int=None,
     blurglass: bool=None, 
-    blurglass_kwargs: dict={}
+    blurglass_kwargs: dict=None
 ):
     """
     统一的半透明白色圆角矩形背景
@@ -81,7 +79,33 @@ def roundrect_bg(
     radius = get_cfg_or_value(radius)
     if alpha is not None:
         fill = (*fill[:3], alpha)
-    return RoundRectBg(fill, radius, blurglass=blurglass, blurglass_kwargs=blurglass_kwargs)
+    return report_card_background(
+        fill=fill,
+        radius=radius,
+        blurglass=blurglass,
+        blurglass_kwargs=blurglass_kwargs,
+        theme=resolve_draw_theme(config),
+    )
+
+
+def create_sekai_canvas(
+    *,
+    background: WidgetBg = None,
+    width: int = None,
+    height: int = None,
+    padding: int = BG_PADDING,
+) -> Canvas:
+    """沿用原画布尺寸、内边距和左上对齐，使用通用绘图库的画布实现。"""
+
+    canvas = create_report_canvas(
+        background=background,
+        width=width,
+        padding=padding,
+        theme=resolve_draw_theme(config),
+    ).set_content_align('lt')
+    if height is not None:
+        canvas.set_h(height)
+    return canvas
 
 
 # 使用已部署的标题及团体背景，避免随机选中未提供的旧区域背景。

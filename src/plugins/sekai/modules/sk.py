@@ -338,7 +338,7 @@ async def compose_skp_image(ctx: SekaiHandlerContext) -> Image.Image:
 
     latest_rankings = await get_latest_ranking(ctx, event_id, ranks)
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16).set_item_bg(roundrect_bg()):
             with HSplit().set_content_align('rt').set_item_align('rt').set_padding(16).set_sep(7):
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(5):
@@ -365,8 +365,8 @@ async def compose_skp_image(ctx: SekaiHandlerContext) -> Image.Image:
 
             gh, gw = 30, 180
             with Grid(col_count=len(sources)+2).set_content_align('c').set_sep(hsep=8, vsep=5).set_padding(16):
-                bg1 = FillBg((255, 255, 255, 200))
-                bg2 = FillBg((255, 255, 255, 100))
+                bg1 = flat_surface_background((255, 255, 255, 200))
+                bg2 = flat_surface_background((255, 255, 255, 100))
                 title_style = TextStyle(font=DEFAULT_BOLD_FONT, size=18, color=BLACK)
                 item_style  = TextStyle(font=DEFAULT_FONT,      size=20, color=BLACK)
 
@@ -450,7 +450,7 @@ async def compose_skl_image(ctx: SekaiHandlerContext, event: dict = None, full: 
     ranks = await get_latest_ranking(ctx, eid, query_ranks)
     ranks = sorted(ranks, key=lambda x: x.rank)
     
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_item_bg(roundrect_bg()):
             with HSplit().set_content_align('rt').set_item_align('rt').set_padding(8).set_sep(7):
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(5):
@@ -471,8 +471,8 @@ async def compose_skl_image(ctx: SekaiHandlerContext, event: dict = None, full: 
 
             if ranks:
                 gh = 30
-                bg1 = FillBg((255, 255, 255, 200))
-                bg2 = FillBg((255, 255, 255, 100))
+                bg1 = flat_surface_background((255, 255, 255, 200))
+                bg2 = flat_surface_background((255, 255, 255, 100))
                 title_style = TextStyle(font=DEFAULT_BOLD_FONT, size=18, color=BLACK)
                 item_style  = TextStyle(font=DEFAULT_FONT,      size=20, color=BLACK)
                 with VSplit().set_content_align('c').set_item_align('c').set_sep(8).set_padding(8):
@@ -532,7 +532,7 @@ async def compose_sks_image(ctx: SekaiHandlerContext, unit: str, event: dict = N
                 break
     speeds.sort(key=lambda x: x[0])
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_item_bg(roundrect_bg()):
             with HSplit().set_content_align('rt').set_item_align('rt').set_padding(8).set_sep(7):
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(5):
@@ -553,8 +553,8 @@ async def compose_sks_image(ctx: SekaiHandlerContext, unit: str, event: dict = N
 
             if speeds:
                 gh = 30
-                bg1 = FillBg((255, 255, 255, 200))
-                bg2 = FillBg((255, 255, 255, 100))
+                bg1 = flat_surface_background((255, 255, 255, 200))
+                bg2 = flat_surface_background((255, 255, 255, 100))
                 title_style = TextStyle(font=DEFAULT_BOLD_FONT, size=18, color=BLACK)
                 item_style  = TextStyle(font=DEFAULT_FONT,      size=20, color=BLACK)
                 with VSplit().set_content_align('l').set_item_align('l').set_sep(8).set_padding(8):
@@ -703,7 +703,7 @@ async def compose_sk_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[str
             texts.append((f"排名 {get_board_rank_str(rank.rank)}  -  {get_board_score_str(rank.score)}", style2))
             texts.append((f"RT: {get_readable_datetime(rank.time, show_original_time=False)}", style4))
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_item_bg(roundrect_bg(fill=SK_TEXT_QUERY_BG_COLOR)):
             with HSplit().set_content_align('rt').set_item_align('rt').set_padding(8).set_sep(7):
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(5):
@@ -858,7 +858,7 @@ async def compose_cf_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[str
                 texts.append((f"记录时间内有数据空缺，周回数仅供参考", style4.replace(color=(200, 0, 0))))
             texts.append((f"RT: {get_readable_datetime(d['start_time'], show_original_time=False)} ~ {get_readable_datetime(d['end_time'], show_original_time=False)}", style4))
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_item_bg(roundrect_bg(fill=SK_TEXT_QUERY_BG_COLOR)):
             with HSplit().set_content_align('rt').set_item_align('rt').set_padding(8).set_sep(7):
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(5):
@@ -989,7 +989,7 @@ async def compose_csb_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[st
     HEAT_COLOR_MAX = color_code_to_rgb('#FFB5B5')
     HEAT_COLOR_MYSEKAI = color_code_to_rgb('#CCFFCC')
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_item_bg(roundrect_bg(fill=SK_TEXT_QUERY_BG_COLOR)):
             with HSplit().set_content_align('rt').set_item_align('rt').set_padding(8).set_sep(7):
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(5):
@@ -1024,7 +1024,7 @@ async def compose_csb_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[st
                                 else:
                                     color = lerp_color(HEAT_COLOR_MIN, HEAT_COLOR_MAX, max(min((playcount - 15) / 15, 1.0), 0.0))
                                 TextBox(playcount_text, TextStyle(font=DEFAULT_FONT, size=14, color=BLACK), overflow='clip') \
-                                    .set_bg(RoundRectBg(color, radius=4)).set_content_align('c').set_size((30, 30)).set_offset((0, -2))
+                                    .set_bg(colored_surface_background(color, radius=4)).set_content_align('c').set_size((30, 30)).set_offset((0, -2))
         
             with VSplit().set_content_align('lt').set_item_align('lt').set_sep(6).set_padding(16):
                 TextBox(*first_text)
@@ -1158,7 +1158,7 @@ async def compose_player_trace_image(ctx: SekaiHandlerContext, qtype: str, qval:
         return plt_fig_to_image(fig, tight=True)
     
     img = await run_in_pool(draw_graph)
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         ImageBox(img).set_bg(roundrect_bg(fill=(255, 255, 255, 200))).set_padding(16)
         if wl_cid:
             with VSplit().set_content_align('c').set_item_align('c').set_sep(4).set_bg(roundrect_bg()).set_padding(8):
@@ -1336,7 +1336,7 @@ async def compose_rank_trace_image(ctx: SekaiHandlerContext, rank: int, event: d
     
     img = await run_in_pool(draw_graph)
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         ImageBox(img).set_bg(roundrect_bg(fill=(255, 255, 255, 200))).set_padding(16)
         if wl_cid:
             with VSplit().set_content_align('c').set_item_align('c').set_sep(4).set_bg(roundrect_bg()).set_padding(8):
@@ -1394,7 +1394,7 @@ async def compose_winrate_predict_image(ctx: SekaiHandlerContext) -> Image.Image
 
     win_tid = tids[0] if predict.predict_rates[tids[0]] >= predict.predict_rates[tids[1]] else tids[1]
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16).set_item_bg(roundrect_bg()):
             with HSplit().set_content_align('rt').set_item_align('rt').set_padding(16).set_sep(7):
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(5):

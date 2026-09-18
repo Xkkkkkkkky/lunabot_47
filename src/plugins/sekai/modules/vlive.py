@@ -104,7 +104,7 @@ async def compose_vlive_list_image(ctx: SekaiCmdHandler, vlives, title=None, tit
     """
     从给定的多个vlive生成一个vlive列表图片
     """
-    with Canvas(bg=bg).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=bg) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             if title and title_style:
                 TextBox(title, title_style).set_bg(roundrect_bg()).set_padding(16)

@@ -57,7 +57,7 @@ async def compose_character_all_stamp_image(ctx: SekaiHandlerContext, cid: int, 
     stamp_imgs = await asyncio.gather(*[get_stamp_image(ctx, sid) for sid in stamp_ids])
     stamp_id_imgs = [(sid, img) for sid, img in zip(stamp_ids, stamp_imgs) if img]
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas() as canvas:
         with VSplit().set_sep(8).set_item_align('l').set_bg(roundrect_bg()).set_padding(8):
             TextBox(
                 f"发送\"{ctx.original_trigger_cmd} 序号\"获取单张表情\n"

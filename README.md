@@ -48,6 +48,16 @@ Note: This project is for reference and learning purposes only, and is **not** a
 
 - (Optional) Start the Sekai Deck Recommendation Service: [README.md](./src/services/deck_recommender/README.md)
 
+### 静默群配置
+
+`silent_groups` 启动时读取，手动修改后须重启 bot 生效。
+
+直接编辑项目内 `data/utils/db.json` 的 `silent_groups` 列表，加上或删去数字群号后重启 bot 即可生效。静默群无需同时加入 `enabled_groups`，仅在后台执行 `/加图`，且完全静默地拦截所有消息发送，不提供聊天指令开关，超级管理员也不能绕过静默限制。`/加图` 仍遵守原有图片权限、冷却和去重规则。移除群号后，将恢复由 `enabled_groups` 决定的原状态。
+
+```json
+"silent_groups": []
+```
+
 ### NapCat on Windows
 
 When the bot and NapCat run on different machines, NapCat cannot read the bot's

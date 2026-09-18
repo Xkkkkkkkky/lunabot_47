@@ -73,7 +73,7 @@ async def compose_challenge_live_detail_image(ctx: SekaiHandlerContext, qid: int
 
     max_score = max([item['highScore'] for item in await ctx.md.challenge_live_high_score_rewards.get()])
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             await get_detailed_profile_card(ctx, profile, err_msg)
             with VSplit().set_content_align('c').set_item_align('c').set_sep(8).set_padding(16).set_bg(roundrect_bg()):
@@ -114,19 +114,19 @@ async def compose_challenge_live_detail_image(ctx: SekaiHandlerContext, qid: int
                             elif x > 100_0000:  color = (255, 150, 100, 255)
                             elif x > 50_0000:   color = (255, 100, 100, 255)
                             if progress > 0:
-                                Spacer(w=total_w, h=total_h).set_bg(RoundRectBg(fill=(100, 100, 100, 255), radius=total_h//2))
-                                Spacer(w=progress_w, h=progress_h).set_bg(RoundRectBg(fill=color, radius=(total_h-border)//2)).set_offset((border, border))
+                                Spacer(w=total_w, h=total_h).set_bg(colored_surface_background((100, 100, 100, 255), total_h//2))
+                                Spacer(w=progress_w, h=progress_h).set_bg(colored_surface_background(color, (total_h-border)//2)).set_offset((border, border))
 
                                 def draw_line(line_x: int):
                                     p = line_x / max_score
                                     if p <= 0 or p >= 1: return
                                     lx = int((total_w - border * 2) * p)
                                     color = (100, 100, 100, 255) if line_x < x else (150, 150, 150, 255)
-                                    Spacer(w=1, h=total_h//2-1).set_bg(FillBg(color)).set_offset((border + lx - 1, total_h//2))
+                                    Spacer(w=1, h=total_h//2-1).set_bg(flat_surface_background(color)).set_offset((border + lx - 1, total_h//2))
                                 for line_x in range(0, max_score, 50_0000):
                                     draw_line(line_x)
                             else:
-                                Spacer(w=total_w, h=total_h).set_bg(RoundRectBg(fill=(100, 100, 100, 100), radius=total_h//2))
+                                Spacer(w=total_w, h=total_h).set_bg(colored_surface_background((100, 100, 100, 100), total_h//2))
 
                         TextBox(jewel, text_style).set_w(w5).set_content_align('c')
                         TextBox(fragment, text_style).set_w(w6).set_content_align('c')
@@ -206,7 +206,7 @@ async def compose_power_bonus_detail_image(ctx: SekaiHandlerContext, qid: int) -
     header_style = TextStyle(font=DEFAULT_BOLD_FONT, size=24, color=(25, 25, 25, 255))
     text_style = TextStyle(font=DEFAULT_FONT, size=16, color=(100, 100, 100, 255))
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             await get_detailed_profile_card(ctx, profile, err_msg)
             with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_item_bg(roundrect_bg()).set_bg(roundrect_bg()).set_padding(16):
@@ -382,7 +382,7 @@ async def compose_area_item_upgrade_materials_image(ctx: SekaiHandlerContext, qi
     gray_color, red_color, green_color = (50, 50, 50), (200, 0, 0), (0, 200, 0)
     ok_color = green_color if profile else gray_color
     no_color = red_color if profile else gray_color
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             if profile:
                 await get_detailed_profile_card(ctx, profile, pmsg)
@@ -510,7 +510,7 @@ async def compose_bonds_image(ctx: SekaiHandlerContext, qid: int, cid: int | Non
     async def get_chara_color(c: int):
         return color_code_to_rgb((await ctx.md.game_character_units.find_by_id(c))['colorCode'])
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             await get_detailed_profile_card(ctx, profile, err_msg)
             with VSplit().set_content_align('l').set_item_align('l').set_sep(8).set_padding(16).set_bg(roundrect_bg()):
@@ -573,19 +573,19 @@ async def compose_bonds_image(ctx: SekaiHandlerContext, qid: int, cid: int | Non
                             progress_h = total_h - border * 2
                             color = LinearGradient(c1=color1, c2=color2, p1=(0, 0.5), p2=(1, 0.5))
                             if has_bond and progress > 0:
-                                Spacer(w=total_w, h=total_h).set_bg(RoundRectBg(fill=(100, 100, 100, 255), radius=total_h//2))
-                                Spacer(w=progress_w, h=progress_h).set_bg(RoundRectBg(fill=color, radius=(total_h-border)//2)).set_offset((border, border))
+                                Spacer(w=total_w, h=total_h).set_bg(colored_surface_background((100, 100, 100, 255), total_h//2))
+                                Spacer(w=progress_w, h=progress_h).set_bg(colored_surface_background(color, (total_h-border)//2)).set_offset((border, border))
 
                                 def draw_line(line_x: int):
                                     p = line_x / max_level
                                     if p <= 0 or p >= 1: return
                                     lx = int((total_w - border * 2) * p)
                                     color = (100, 100, 100, 255) if line_x < x else (150, 150, 150, 255)
-                                    Spacer(w=1, h=total_h//2-1).set_bg(FillBg(color)).set_offset((border + lx - 1, total_h//2))
+                                    Spacer(w=1, h=total_h//2-1).set_bg(flat_surface_background(color)).set_offset((border + lx - 1, total_h//2))
                                 for line_x in range(0, max_level, 10):
                                     draw_line(line_x)
                             else:
-                                Spacer(w=total_w, h=total_h).set_bg(RoundRectBg(fill=(100, 100, 100, 100), radius=total_h//2))
+                                Spacer(w=total_w, h=total_h).set_bg(colored_surface_background((100, 100, 100, 100), total_h//2))
 
                         TextBox(need_exp_text, text_style).set_w(w5).set_content_align('c')
 
@@ -641,7 +641,7 @@ async def compose_leader_count_image(ctx: SekaiHandlerContext, qid: int) -> Imag
     async def get_chara_color(c: int):
         return color_code_to_rgb((await ctx.md.game_character_units.find_by_id(c))['colorCode'])
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             await get_detailed_profile_card(ctx, profile, err_msg)
             with VSplit().set_content_align('l').set_item_align('l').set_sep(8).set_padding(16).set_bg(roundrect_bg()):
@@ -686,19 +686,19 @@ async def compose_leader_count_image(ctx: SekaiHandlerContext, qid: int) -> Imag
                             elif x > 20000:  color = (255, 150, 100, 255)
                             elif x > 10000:  color = (255, 100, 100, 255)
                             if progress > 0:
-                                Spacer(w=total_w, h=total_h).set_bg(RoundRectBg(fill=(100, 100, 100, 255), radius=total_h//2))
-                                Spacer(w=progress_w, h=progress_h).set_bg(RoundRectBg(fill=color, radius=(total_h-border)//2)).set_offset((border, border))
+                                Spacer(w=total_w, h=total_h).set_bg(colored_surface_background((100, 100, 100, 255), total_h//2))
+                                Spacer(w=progress_w, h=progress_h).set_bg(colored_surface_background(color, (total_h-border)//2)).set_offset((border, border))
 
                                 def draw_line(line_x: int):
                                     p = line_x / max_playcount
                                     if p <= 0 or p >= 1: return
                                     lx = int((total_w - border * 2) * p)
                                     color = (100, 100, 100, 255) if line_x < x else (150, 150, 150, 255)
-                                    Spacer(w=1, h=total_h//2-1).set_bg(FillBg(color)).set_offset((border + lx - 1, total_h//2))
+                                    Spacer(w=1, h=total_h//2-1).set_bg(flat_surface_background(color)).set_offset((border + lx - 1, total_h//2))
                                 for line_x in range(0, max_playcount, 10000):
                                     draw_line(line_x)
                             else:
-                                Spacer(w=total_w, h=total_h).set_bg(RoundRectBg(fill=(100, 100, 100, 100), radius=total_h//2))
+                                Spacer(w=total_w, h=total_h).set_bg(colored_surface_background((100, 100, 100, 100), total_h//2))
 
     add_watermark(canvas)
     return await canvas.get_img()

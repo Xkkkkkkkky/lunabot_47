@@ -1,7 +1,7 @@
 [project]
-name = "mybot"
-version = "0.1.0"
-description = "mybot"
+name = "lunabot_47"
+version = "0.4.0"
+description = "lunabot_47"
 readme = "README.md"
 requires-python = ">=3.8, <4.0"
 

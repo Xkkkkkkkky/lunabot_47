@@ -1080,7 +1080,7 @@ async def compose_music_detail_image(ctx: SekaiHandlerContext, mid: int, title: 
             leaderboard_matrix[-1].append(_last_music_leaderboard_info.get((live_type, target, mid), None))
             
     # 绘图
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16).set_item_bg(roundrect_bg()):
             with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_padding(16).set_item_bg(roundrect_bg()):
                 # 附加标题
@@ -1164,14 +1164,14 @@ async def compose_music_detail_image(ctx: SekaiHandlerContext, mid: int, title: 
                         th_w, th_h = 80, 36
                         tr_w, tr_h = 130, 36
                         # 表头
-                        Spacer(w=th_w, h=th_h).set_bg(FillBg((255, 255, 255, 100)))
+                        Spacer(w=th_w, h=th_h).set_bg(flat_surface_background((255, 255, 255, 100)))
                         for target in target_keys:
                             TextBox(LEADERBOARD_TARGET_NAMES[target], TextStyle(DEFAULT_BOLD_FONT, 18, (50, 50, 50))) \
-                                .set_bg(FillBg((255, 255, 255, 100))).set_size((tr_w, th_h)).set_content_align('c')
+                                .set_bg(flat_surface_background((255, 255, 255, 100))).set_size((tr_w, th_h)).set_content_align('c')
                         # 内容
                         for i, live_type in enumerate(live_type_keys):
                             TextBox(LEADERBOARD_LIVETYPE_NAMES[live_type], TextStyle(DEFAULT_BOLD_FONT, 18, (50, 50, 50))) \
-                                .set_bg(FillBg((255, 255, 255, 50))).set_size((th_w, th_h)).set_content_align('c')
+                                .set_bg(flat_surface_background((255, 255, 255, 50))).set_size((th_w, th_h)).set_content_align('c')
                             for j, target in enumerate(target_keys):
                                 info = leaderboard_matrix[i][j]
                                 if info:
@@ -1186,7 +1186,7 @@ async def compose_music_detail_image(ctx: SekaiHandlerContext, mid: int, title: 
                                 green, yellow, red = (200, 255, 200, 75), (255, 200, 150, 75), (255, 150, 150, 50)
                                 bg_color = lerp_color(green, yellow, rank_ratio) if rank_ratio <= 0.5 else lerp_color(yellow, red, rank_ratio - 0.5)
 
-                                with Frame().set_bg(FillBg(bg_color)).set_size((tr_w, tr_h)).set_content_align('c'):
+                                with Frame().set_bg(flat_surface_background(bg_color)).set_size((tr_w, tr_h)).set_content_align('c'):
                                     with HSplit().set_content_align('b').set_item_align('b').set_sep(2):
                                         TextBox(text1, TextStyle(DEFAULT_BOLD_FONT, 18, text_color, use_shadow=True))
                                         if text2:
@@ -1264,7 +1264,7 @@ async def compose_music_list_image(
                 continue
             music_results.setdefault((mid, result_diff), []).append(result)
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16) as vs:
             if profile:
                 await get_detailed_profile_card(ctx, profile, err_msg)
@@ -1377,7 +1377,7 @@ async def compose_play_progress_image(ctx: SekaiHandlerContext, diff: str, qid: 
 
     count = [(lv, c) for lv, c in count.items() if c.total > 0]
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             if profile:
                 await get_detailed_profile_card(ctx, profile, err_msg)
@@ -1406,7 +1406,9 @@ async def compose_play_progress_image(ctx: SekaiHandlerContext, diff: str, qid: 
                     with VSplit().set_content_align('c').set_item_align('c').set_sep(8):
                         # 进度条
                         def draw_bar(color, h, blurglass=False):
-                            return Frame().set_size((w, h)).set_bg(RoundRectBg(fill=color, radius=4, blurglass=blurglass))
+                            return Frame().set_size((w, h)).set_bg(
+                                colored_surface_background(color, radius=4, blurglass=blurglass)
+                            )
                         with draw_bar(PLAY_RESULT_COLORS['not_clear'], bar_h, blurglass=True).set_content_align('b') as f:
                             if c.clear: draw_bar(PLAY_RESULT_COLORS['clear'], int(bar_h * c.clear / c.total))
                             if c.fc:    draw_bar(PLAY_RESULT_COLORS['fc'],    int(bar_h * c.fc / c.total))
@@ -1512,7 +1514,7 @@ async def compose_music_brief_list_image(
     covers = await batch_gather(*[get_music_cover_thumb(ctx, m['id']) for m in musics])
     diff_infos = [await get_music_diff_info(ctx, m['id']) for m in musics]
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_item_bg(roundrect_bg()):
             if title and title_style:
                 if title_shadow:
@@ -1605,7 +1607,7 @@ async def compose_music_rewards_image(ctx: SekaiHandlerContext, qid: int) -> Ima
                         combo_rewards[diff][lv] += MUSIC_COMBO_REWARDS[diff][i].jewel \
                             if diff != 'append' else MUSIC_COMBO_REWARDS[diff][i].shard
         # 绘图
-        with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+        with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
             with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
                 await get_detailed_profile_card(ctx, profile, err_msg)
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16).set_padding(16).set_bg(roundrect_bg()):
@@ -1669,7 +1671,7 @@ async def compose_music_rewards_image(ctx: SekaiHandlerContext, qid: int) -> Ima
             return f"{x[0]*x[1]} ({x[0]}×{x[1]}首)"
 
         # 绘图
-        with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+        with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
             with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
                 await get_basic_profile_card(ctx, profile)
                 with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16).set_padding(16).set_bg(roundrect_bg()):

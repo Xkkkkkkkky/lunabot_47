@@ -284,7 +284,7 @@ async def compose_card_list_image(ctx: SekaiHandlerContext, cards: List[Dict], q
             elif supply_name in ['CFes限定', 'BFes限定']:
                 ImageBox(ctx.static_imgs.get(f"card/fes_limited.png"), size=(int(sz*0.6), None))
 
-    with Canvas(bg=random_unit_bg(bg_unit)).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=random_unit_bg(bg_unit)) as canvas:
         with VSplit().set_sep(16).set_content_align('lt').set_item_align('lt'):
             if qid:
                 await get_detailed_profile_card(ctx, profile, pmsg)
@@ -363,7 +363,7 @@ async def compose_card_story_summary_msg_list(
 """.strip() + "\n" * 16)
     
     for i, ep in enumerate(eps, 1):
-        with Canvas(bg=SEKAI_BLUE_BG).set_padding(8) as canvas:
+        with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=8) as canvas:
             row_count = int(math.sqrt(len(ep['cids'])))
             with Grid(row_count=row_count).set_sep(2, 2):
                 for cid in ep['cids']:
@@ -417,7 +417,7 @@ async def compose_card_story_summary_image(
     w = 720
     line_sep = 5
 
-    with Canvas(bg=SEKAI_BLUE_BG_DAY).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_sep(8).set_item_align('lt').set_content_align('lt').set_item_bg(roundrect_bg()):
             with HSplit().set_padding(16).set_sep(16).set_item_align('l').set_content_align('l'):
                 for thumb in card_thumbs:
@@ -654,11 +654,11 @@ async def compose_box_image(ctx: SekaiHandlerContext, qid: int, cards: dict, sho
             elif supply_name in ['CFes限定', 'BFes限定']:
                 ImageBox(ctx.static_imgs.get(f"card/fes_limited.png"), size=(int(sz*0.6), None))
             if not card['has'] and profile:
-                Spacer(w=sz, h=sz).set_bg(RoundRectBg(fill=(0,0,0,120), radius=2))
+                Spacer(w=sz, h=sz).set_bg(colored_surface_background((0, 0, 0, 120), radius=2))
         if show_id:
             TextBox(f"{card['id']}", TextStyle(font=DEFAULT_FONT, size=12, color=BLACK)).set_w(sz)
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             if qid:
                 await get_detailed_profile_card(ctx, profile, pmsg)
@@ -669,7 +669,7 @@ async def compose_box_image(ctx: SekaiHandlerContext, qid: int, cards: dict, sho
                         chara_color = color_code_to_rgb((await ctx.md.game_character_units.find_by_id(chara_id))['colorCode'])
                         col_num = max(1, len(range(0, len(cards), best_height)))
                         row_num = max(1, min(best_height, len(cards)))
-                        Spacer(w=sz * col_num + sep * (col_num - 1), h=sep).set_bg(FillBg(chara_color))
+                        Spacer(w=sz * col_num + sep * (col_num - 1), h=sep).set_bg(flat_surface_background(chara_color))
                         with Grid(row_count=row_num, vertical=row_num > col_num).set_content_align('lt').set_item_align('lt').set_sep(sep, sep):
                             for card in cards:
                                 draw_card(card)
@@ -917,7 +917,7 @@ async def compose_card_detail_image(ctx: SekaiHandlerContext, card_id: int):
     small_style = TextStyle(font=DEFAULT_FONT, size=18, color=(70, 70, 70))
     tip_style = TextStyle(font=DEFAULT_FONT, size=18, color=(0, 0, 0))
 
-    with Canvas(bg=random_unit_bg(unit)).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=random_unit_bg(unit)) as canvas:
         with HSplit().set_sep(16).set_content_align('lt').set_item_align('lt'):
             # 左侧: 卡面+关联活动+关联卡池+提示
             with VSplit().set_padding(0).set_sep(16).set_content_align('lt').set_item_align('lt').set_item_bg(roundrect_bg()):

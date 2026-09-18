@@ -23,6 +23,7 @@ from ..draw.plot import (
     DEFAULT_FONT,
     FillBg,
     Frame,
+    Gradient,
     HSplit,
     ImageBg,
     ImageBox,
@@ -43,6 +44,7 @@ from .utils import (
 
 
 RGBA = tuple[int, int, int, int]
+SurfaceFill = tuple[int, int, int] | RGBA | Gradient
 
 # 色号完整取自 gameCharacterUnits.json 的 26 个角色唯一 colorCode。
 # 先按色相归档，便于审阅并确保没有遗漏角色色；组内大致按色相递进。
@@ -747,21 +749,48 @@ def report_card_background(
     *,
     compact: bool = False,
     theme: UnifiedDrawTheme = DEFAULT_DRAW_THEME,
+    fill: SurfaceFill | None = None,
+    radius: int | None = None,
+    blurglass: bool = True,
+    blurglass_kwargs: dict[str, Any] | None = None,
 ) -> WidgetBg:
-    """创建带轻微阴影的半透明玻璃卡片背景。"""
+    """创建玻璃卡片背景；显式色值用于保留既有卡片的透明度。"""
+
+    # 显式传入原卡片色值时沿用绘图内核默认的模糊和阴影参数，避免改变旧组件外观。
+    glass_options = {} if fill is not None else {
+        "blur": 6,
+        "shadow_width": 10 if compact else 14,
+        "shadow_alpha": 0.10 if compact else 0.17,
+    }
+    if blurglass_kwargs:
+        glass_options.update(blurglass_kwargs)
 
     return RoundRectBg(
-        fill=theme.compact_card_fill if compact else theme.card_fill,
-        radius=theme.compact_card_radius if compact else theme.card_radius,
-        stroke=theme.card_stroke,
+        fill=fill if fill is not None else (theme.compact_card_fill if compact else theme.card_fill),
+        radius=radius if radius is not None else (theme.compact_card_radius if compact else theme.card_radius),
+        stroke=None if fill is not None else theme.card_stroke,
         stroke_width=1,
-        blurglass=True,
-        blurglass_kwargs={
-            "blur": 6,
-            "shadow_width": 10 if compact else 14,
-            "shadow_alpha": 0.10 if compact else 0.17,
-        },
+        blurglass=blurglass,
+        blurglass_kwargs=glass_options,
     )
+
+
+def colored_surface_background(
+    fill: SurfaceFill,
+    radius: int = 8,
+    *,
+    corners: tuple[bool, bool, bool, bool] = (True, True, True, True),
+    blurglass: bool = False,
+) -> WidgetBg:
+    """保持进度条、难度标记等功能色的原色值、透明度和圆角。"""
+
+    return RoundRectBg(fill=fill, radius=radius, corners=corners, blurglass=blurglass)
+
+
+def flat_surface_background(fill: SurfaceFill) -> WidgetBg:
+    """保持表格与进度标记的原色值和透明度。"""
+
+    return FillBg(fill)
 
 
 def subtle_panel_background(
@@ -1343,6 +1372,8 @@ __all__ = [
     "resolve_draw_theme",
     "default_page_background",
     "report_card_background",
+    "colored_surface_background",
+    "flat_surface_background",
     "subtle_panel_background",
     "accent_badge_background",
     "themed_text_style",

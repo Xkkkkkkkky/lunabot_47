@@ -195,7 +195,7 @@ async def compose_score_control_image(ctx: SekaiHandlerContext, target_point: in
     style2 = TextStyle(font=DEFAULT_FONT,      size=16, color=(50, 50, 50))
     style3 = TextStyle(font=DEFAULT_BOLD_FONT, size=16, color=(200, 50, 50))
     
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas() as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_item_bg(roundrect_bg()) as vs:
             # 标题
             with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_padding(8) as title_vs:
@@ -223,8 +223,8 @@ async def compose_score_control_image(ctx: SekaiHandlerContext, target_point: in
                 for i in range(0, len(valid_scores), SHOW_SEG_LEN):
                     scores = valid_scores[i:i + SHOW_SEG_LEN]
                     gh, gw1, gw2, gw3, gw4 = 20, 54, 48, 90, 90
-                    bg1 = FillBg((255, 255, 255, 200))
-                    bg2 = FillBg((255, 255, 255, 100))
+                    bg1 = flat_surface_background((255, 255, 255, 200))
+                    bg2 = flat_surface_background((255, 255, 255, 100))
                     with VSplit().set_content_align('lt').set_item_align('lt').set_sep(4).set_padding(8):
                         with HSplit().set_content_align('lt').set_item_align('lt').set_sep(4):
                             TextBox("加成",  style1).set_bg(bg1).set_size((gw1, gh)).set_content_align('c')
@@ -307,7 +307,7 @@ async def compose_custom_room_score_control_image(ctx: SekaiHandlerContext, targ
     style3 = TextStyle(font=DEFAULT_BOLD_FONT, size=20, color=(200, 50, 50))
 
     # 合成图片
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas() as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_padding(16).set_bg(roundrect_bg()):
             # 标题
             with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8):
@@ -330,7 +330,7 @@ async def compose_custom_room_score_control_image(ctx: SekaiHandlerContext, targ
             # 数据
             gh, vsep, hsep = 40, 6, 6
             def bg_fn(i: int, w: Widget):
-                return FillBg((255, 255, 255, 200)) if i % 2 == 0 else FillBg((255, 255, 255, 100))
+                return flat_surface_background((255, 255, 255, 200)) if i % 2 == 0 else flat_surface_background((255, 255, 255, 100))
             with HSplit().set_content_align('lt').set_item_align('lt').set_sep(hsep):
                 # 活动加成
                 with VSplit().set_content_align('c').set_item_align('c').set_sep(vsep).set_item_bg(bg_fn):
@@ -358,7 +358,7 @@ async def compose_custom_room_score_control_image(ctx: SekaiHandlerContext, targ
 
 # 合成歌曲meta图片
 async def compose_music_meta_image(ctx: SekaiHandlerContext, mids: list[int]) -> Image.Image:
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas() as canvas:
         with HSplit().set_content_align('lt').set_item_align('lt').set_sep(8):
             for mid in mids:
                 music = await ctx.md.musics.find_by_id(mid)
@@ -410,7 +410,7 @@ async def compose_music_meta_image(ctx: SekaiHandlerContext, mids: list[int]) ->
                                 
                                 with HSplit().set_content_align('lb').set_item_align('lb').set_sep(0):
                                     TextBox(diff.upper(), TextStyle(font=DEFAULT_BOLD_FONT, size=20, color=WHITE)) \
-                                        .set_bg(RoundRectBg(DIFF_COLORS[diff], radius=6)).set_padding(4)
+                                        .set_bg(colored_surface_background(DIFF_COLORS[diff], radius=6)).set_padding(4)
                                     Spacer(w=8)
                                     TextBox(f"时长", style1)
                                     TextBox(f" {music_time}s", style2)
@@ -562,7 +562,7 @@ async def compose_music_board_image(
     title_style = TextStyle(font=DEFAULT_BOLD_FONT, size=18, color=BLACK)
     item_style  = TextStyle(font=DEFAULT_FONT,      size=20, color=BLACK)
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas() as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(8).set_padding(16).set_bg(roundrect_bg()):
             # 标题
             match target:
@@ -610,9 +610,9 @@ async def compose_music_board_image(
             # 表格
             gh, vsep, hsep = 30, 5, 5
             def row_bg_fn(i: int, w: Widget):
-                return FillBg((255, 255, 255, 200)) if i % 2 == 0 else FillBg((255, 255, 255, 100))
+                return flat_surface_background((255, 255, 255, 200)) if i % 2 == 0 else flat_surface_background((255, 255, 255, 100))
             def diff_bg_fn(i: int, w: Widget):
-                return FillBg(DIFF_COLORS[w.userdata['diff']]) if 'diff' in w.userdata else FillBg((255, 255, 255, 200))
+                return flat_surface_background(DIFF_COLORS[w.userdata['diff']]) if 'diff' in w.userdata else flat_surface_background((255, 255, 255, 200))
                 
             with HSplit().set_content_align('c').set_item_align('c').set_sep(hsep):
                 # rank

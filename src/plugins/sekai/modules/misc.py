@@ -123,7 +123,7 @@ async def _(ctx: SekaiHandlerContext):
     result: CardExtractResult = await run_in_pool(card_extractor.extract_cards, img)
     logger.info(f"CardExtractor extracted {len(result.cards)} cards in {datetime.now() - t} seconds")
     
-    with Canvas(bg=FillBg(WHITE)).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas() as canvas:
         with Grid(col_count=result.grid.cols).set_sep(8, 8):
             for row_idx in range(result.grid.rows):
                 for col_idx in range(result.grid.cols):
@@ -235,7 +235,8 @@ async def _(ctx: SekaiHandlerContext):
     cid = info['cid']
     colorcode = (await ctx.md.game_character_units.find_by_id(cid))['colorCode']
 
-    with Canvas(bg=ImageBg(card_image)).set_padding(BG_PADDING) as canvas:
+    # 生日页面继续使用卡牌原图作为整页背景，仅替换画布实现。
+    with create_sekai_canvas(background=ImageBg(card_image)) as canvas:
         with VSplit().set_content_align('c').set_item_align('c').set_padding(16).set_sep(8) \
             .set_item_bg(roundrect_bg()).set_bg(roundrect_bg()):
         
@@ -253,7 +254,7 @@ async def _(ctx: SekaiHandlerContext):
                     Spacer(w=16)
                     TextBox(f"应援色", style1)
                     TextBox(colorcode, TextStyle(DEFAULT_FONT, 20, ADAPTIVE_WB)) \
-                        .set_bg(RoundRectBg(color_code_to_rgb(colorcode), radius=4)).set_padding(8)
+                        .set_bg(colored_surface_background(color_code_to_rgb(colorcode), radius=4)).set_padding(8)
 
                 draw_time_range("🎰卡池开放时间", gacha_start, gacha_end)
                 draw_time_range("🎤虚拟LIVE时间", live_start, live_end)

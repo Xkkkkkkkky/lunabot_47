@@ -359,7 +359,7 @@ async def compose_event_list_image(ctx: SekaiHandlerContext, filter: EventListFi
 
     style1 = TextStyle(font=DEFAULT_HEAVY_FONT, size=10, color=(50, 50, 50))
     style2 = TextStyle(font=DEFAULT_FONT, size=10, color=(70, 70, 70))
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_padding(0).set_sep(4).set_content_align('lt').set_item_align('lt'):
             TextBox(
                 f"活动按时间顺序排列，黄色为当期活动，灰色为过去活动",
@@ -490,7 +490,7 @@ async def compose_event_story_summary_msg_list(
     msg_lists.append(f"【剧情概要】\n{text}")
     
     for i, ep in enumerate(eps + no_snippet_eps, 1):
-        with Canvas(bg=SEKAI_BLUE_BG).set_padding(8) as canvas:
+        with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=8) as canvas:
             with VSplit().set_sep(8):
                 ImageBox(ep['image'], size=(None, 80))
                 with Grid(col_count=5).set_sep(2, 2):
@@ -551,7 +551,7 @@ async def compose_event_story_summary_image(
     line_sep = 5
 
     with ProfileTimer("event_story.layout"):
-        with Canvas(bg=SEKAI_BLUE_BG_DAY).set_padding(BG_PADDING) as canvas:
+        with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
             with VSplit().set_sep(8).set_item_align('lt').set_content_align('lt').set_item_bg(roundrect_bg()):
                 with HSplit().set_padding(16).set_sep(16).set_item_align('l').set_content_align('l'):
                     ImageBox(banner_img, size=(None, 100))
@@ -812,7 +812,12 @@ async def compose_event_detail_image(ctx: SekaiHandlerContext, event: dict) -> I
     bg = ImageBg(event_bg, blur=False) if event_bg else SEKAI_BLUE_BG
     
     async def draw(w, h):
-        with Canvas(bg=bg, w=w, h=h).set_padding(BG_PADDING).set_content_align('r') as canvas:
+        with create_sekai_canvas(
+            background=bg,
+            width=w,
+            height=h,
+            padding=BG_PADDING,
+        ).set_content_align('r') as canvas:
             with Frame().set_size((w-BG_PADDING*2, h-BG_PADDING*2)).set_content_align('lb').set_padding((64, 0)):
                 if use_story_bg:
                     chara_img = detail.event_ban_chara_img
@@ -868,7 +873,7 @@ async def compose_event_detail_image(ctx: SekaiHandlerContext, event: dict) -> I
                     progress_w, progress_h, border = 320, 8, 1
                     if detail.etype == 'world_bloom' and len(wl_chapters) > 1:
                         with Frame().set_padding(8).set_content_align('lt'):
-                            Spacer(w=progress_w+border*2, h=progress_h+border*2).set_bg(RoundRectBg((75, 75, 75, 255), 4))
+                            Spacer(w=progress_w+border*2, h=progress_h+border*2).set_bg(colored_surface_background((75, 75, 75, 255), 4))
                             for i, chapter in enumerate(wl_chapters):
                                 cprogress_start = (chapter['start_time'] - detail.start_time) / (detail.end_time - detail.start_time)
                                 cprogress_end = (chapter['end_time'] - detail.start_time) / (detail.end_time - detail.start_time)
@@ -879,13 +884,13 @@ async def compose_event_detail_image(ctx: SekaiHandlerContext, event: dict) -> I
                                     corners = (True, False, False, True)
                                 if i == len(wl_chapters) - 1:
                                     corners = (False, True, True, False)
-                                Spacer(w=int(progress_w * (cprogress_end - cprogress_start)), h=progress_h).set_bg(RoundRectBg(chara_color, 4, corners=corners)) \
+                                Spacer(w=int(progress_w * (cprogress_end - cprogress_start)), h=progress_h).set_bg(colored_surface_background(chara_color, 4, corners=corners)) \
                                     .set_offset((border + int(progress_w * cprogress_start), border))
-                            Spacer(w=int(progress_w * progress), h=progress_h).set_bg(RoundRectBg((255, 255, 255, 200), 4)).set_offset((border, border))
+                            Spacer(w=int(progress_w * progress), h=progress_h).set_bg(colored_surface_background((255, 255, 255, 200), 4)).set_offset((border, border))
                     else:
                         with Frame().set_padding(8).set_content_align('lt'):
-                            Spacer(w=progress_w+border*2, h=progress_h+border*2).set_bg(RoundRectBg((75, 75, 75, 255), 4))
-                            Spacer(w=int(progress_w * progress), h=progress_h).set_bg(RoundRectBg((255, 255, 255, 255), 4)).set_offset((border, border))
+                            Spacer(w=progress_w+border*2, h=progress_h+border*2).set_bg(colored_surface_background((75, 75, 75, 255), 4))
+                            Spacer(w=int(progress_w * progress), h=progress_h).set_bg(colored_surface_background((255, 255, 255, 255), 4)).set_offset((border, border))
 
                 # 活动卡片
                 if detail.event_cards:
@@ -995,7 +1000,7 @@ async def compose_event_record_image(ctx: SekaiHandlerContext, qid: int) -> Imag
                     for item in user_events:
                         TextBox(f"{item.get('eventPoint', '-')}", style3, overflow='clip').set_h(gh).set_content_align('c')
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             await get_detailed_profile_card(ctx, profile, err_msg)
             TextBox("每次抓包仅包含最近一次活动的记录\n上传时进行增量更新，未上传过的记录将会丢失\n领取活动牌子后上传数据才能记录排名", style4, use_real_line_count=True) \

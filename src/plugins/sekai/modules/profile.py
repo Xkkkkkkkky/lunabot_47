@@ -825,7 +825,7 @@ async def compose_profile_image(ctx: SekaiHandlerContext, basic_profile: dict, v
             with Grid(col_count=6).set_sep(hsep=hs, vsep=vs):
                 for diff, color in DIFF_COLORS.items():
                     t = TextBox(diff.upper(), TextStyle(font=DEFAULT_BOLD_FONT, size=16, color=WHITE))
-                    t.set_bg(RoundRectBg(fill=color, radius=3)).set_size((gw, gh)).set_content_align('c')
+                    t.set_bg(colored_surface_background(color, radius=3)).set_size((gw, gh)).set_content_align('c')
                 diff_count = basic_profile['userMusicDifficultyClearCount']
                 scores = ['liveClear', 'fullCombo', 'allPerfect']
                 play_result = ['clear', 'fc', 'ap']
@@ -836,7 +836,7 @@ async def compose_profile_image(ctx: SekaiHandlerContext, basic_profile: dict, v
                         TextBox(str(count), TextStyle(
                                 DEFAULT_FONT, 20, PLAY_RESULT_COLORS['not_clear'], use_shadow=True,
                                 shadow_color=PLAY_RESULT_COLORS[play_result[i]], shadow_offset=1,
-                            )).set_bg(RoundRectBg(fill=bg_color, radius=3)).set_size((gw, gh)).set_content_align('c')
+                            )).set_bg(colored_surface_background(bg_color, radius=3)).set_size((gw, gh)).set_content_align('c')
         return ret
     
     # 养成部分
@@ -895,7 +895,8 @@ async def compose_profile_image(ctx: SekaiHandlerContext, basic_profile: dict, v
     if vertical is None:
         vertical = bg_settings.vertical
 
-    with Canvas(bg=bg).set_padding(BG_PADDING) as canvas:
+    # 传入图片背景时沿用原 ImageBg，未指定时由 sekai 通用背景负责绘制。
+    with create_sekai_canvas(background=bg) as canvas:
         if not vertical:
             with HSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
                 await draw_info(vertical)

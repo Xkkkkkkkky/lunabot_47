@@ -1698,7 +1698,7 @@ async def compose_deck_recommend_image(
 
     # ---------------------------- 绘图 ---------------------------- #
         
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas() as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16).set_padding(16):
             if uid is not None:
                 await get_detailed_profile_card(ctx, profile, pmsg)
@@ -1805,7 +1805,7 @@ async def compose_deck_recommend_image(
                                 TextBox(f"{last_args} → ", TextStyle(font=DEFAULT_BOLD_FONT, size=26, color=(70, 70, 70)))
                             with Frame().set_size((50, 50)):
                                 if options.music_id != OMAKASE_MUSIC_ID:
-                                    Spacer(w=50, h=50).set_bg(FillBg(fill=DIFF_COLORS[options.music_diff])).set_offset((6, 6))
+                                    Spacer(w=50, h=50).set_bg(flat_surface_background(DIFF_COLORS[options.music_diff])).set_offset((6, 6))
                                     ImageBox(music_cover, size=(50, 50))
                                 else:
                                     ImageBox(music_cover, size=(50, 50), shadow=True)
@@ -1879,7 +1879,7 @@ async def compose_deck_recommend_image(
                                         music_title = music['title'] + f" ({diff.upper()})"
                                         with VSplit().set_content_align('c').set_item_align('c').set_sep(8).set_padding(0).set_h(gh):
                                             with Frame().set_content_align('c'):
-                                                Spacer(w=64, h=64).set_bg(FillBg(fill=DIFF_COLORS[diff])).set_offset((3, 3))
+                                                Spacer(w=64, h=64).set_bg(flat_surface_background(DIFF_COLORS[diff])).set_offset((3, 3))
                                                 ImageBox(await get_music_cover_thumb(jp_ctx, mid), size=(64, 64)).set_offset((-3, -3))
                                             text = f"{mid}"
                                             if marg: text = f"{truncate(marg, 8)} → " + text
@@ -1939,11 +1939,11 @@ async def compose_deck_recommend_image(
                                                     if options.fixed_cards and card_id in options.fixed_cards \
                                                     or options.fixed_characters and character_id in options.fixed_characters:
                                                         TextBox(str(card_id), TextStyle(font=DEFAULT_FONT, size=10, color=WHITE)) \
-                                                            .set_bg(RoundRectBg((200, 50, 50, 200), 2)).set_offset((-2, 0)).set_text_offset((0, -2))
+                                                            .set_bg(colored_surface_background((200, 50, 50, 200), 2)).set_offset((-2, 0)).set_text_offset((0, -2))
                                                     else:
                                                         TextBox(str(card_id), TextStyle(font=DEFAULT_FONT, size=10, color=(75, 75, 75))) \
-                                                            .set_bg(RoundRectBg((255, 255, 255, 200), 2)).set_offset((-2, 0)).set_text_offset((0, -2))
-                                                info_bg = RoundRectBg((255, 255, 255, 150), 2)
+                                                            .set_bg(colored_surface_background((255, 255, 255, 200), 2)).set_offset((-2, 0)).set_text_offset((0, -2))
+                                                info_bg = colored_surface_background((255, 255, 255, 150), 2)
                                                 with HSplit().set_content_align('c').set_item_align('c').set_sep(3).set_padding(0):
                                                     TextBox(f"SLv.{slv}", TextStyle(font=DEFAULT_FONT, size=12, color=(50, 50, 50))).set_bg(info_bg)
                                                     TextBox(f"↑{sup}%", TextStyle(font=DEFAULT_FONT, size=12, color=(50, 50, 50))).set_bg(info_bg)

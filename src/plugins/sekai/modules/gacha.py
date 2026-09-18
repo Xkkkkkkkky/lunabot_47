@@ -389,7 +389,7 @@ async def compose_gacha_list_image(ctx: SekaiHandlerContext, filter: GachaFilter
     style1 = TextStyle(font=DEFAULT_HEAVY_FONT, size=10, color=(50, 50, 50))
     style2 = TextStyle(font=DEFAULT_FONT,       size=10, color=(70, 70, 70))
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_padding(0).set_sep(4).set_content_align('lt').set_item_align('lt'):
             TextBox(
                 f"卡池按时间顺序排列，黄色为开放中卡池，当前为第 {page}/{total_pages} 页",
@@ -467,7 +467,7 @@ async def compose_gacha_detail_image(ctx: SekaiHandlerContext, gacha: Gacha):
     small_style = TextStyle(font=DEFAULT_FONT, size=12, color=(70, 70, 70))
     tip_style = TextStyle(font=DEFAULT_FONT, size=18, color=(0, 0, 0))
 
-    with Canvas(bg=bg).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=bg) as canvas:
         with HSplit().set_sep(16).set_content_align('lt').set_item_align('lt'):
             w = 600
             with VSplit().set_padding(8).set_sep(8).set_content_align('c').set_item_align('c').set_item_bg(roundrect_bg()).set_bg(roundrect_bg()):
@@ -633,7 +633,7 @@ async def compose_gacha_spin_image(ctx: SekaiHandlerContext, gacha: Gacha, cards
         thumb_size *= 2
         sep *= 2
     col_num = min(5 if count <= 10 else 10, len(grid_items))
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_padding(32).set_sep(24).set_content_align('lt').set_item_align('lt').set_bg(roundrect_bg()):
             with HSplit().set_padding(0).set_sep(32).set_content_align('l').set_item_align('l').set_omit_parent_bg(True):
                 ImageBox(logo_img, size=(None, 100))
@@ -825,7 +825,7 @@ async def compose_gacha_record_image(ctx: SekaiHandlerContext, qid: int, spec_gi
     style2 = TextStyle(font=DEFAULT_FONT, size=16, color=(50, 50, 50))
     style3 = TextStyle(font=DEFAULT_FONT, size=16, color=(100, 0, 0))
 
-    with Canvas(bg=SEKAI_BLUE_BG).set_padding(BG_PADDING) as canvas:
+    with create_sekai_canvas(background=SEKAI_BLUE_BG) as canvas:
         with VSplit().set_content_align('lt').set_item_align('lt').set_sep(16):
             await get_detailed_profile_card(ctx, profile, err_msg)
 
@@ -871,7 +871,7 @@ async def compose_gacha_record_image(ctx: SekaiHandlerContext, qid: int, spec_gi
                                         if not determined:
                                             qs = int(size * 0.3)
                                             TextBox("?", TextStyle(DEFAULT_BOLD_FONT, int(qs * 0.8), BLACK)).set_size((qs, qs)) \
-                                                .set_bg(RoundRectBg((255, 255, 255, 200), radius=qs // 2)).set_content_align('c')
+                                                .set_bg(colored_surface_background((255, 255, 255, 200), radius=qs // 2)).set_content_align('c')
                         if gdata['too_long']:
                             TextBox("⚠️ 由于该卡池开放时间较长，不进行不准确的NEW卡推测", style3, use_real_line_count=True).set_padding(4)
 

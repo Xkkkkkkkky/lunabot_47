@@ -918,11 +918,47 @@ def _save_all_file_dbs_on_shutdown():
     FileDB.save_all_changed()
 
 
+class UtilsFileDB(FileDB):
+    """工具数据库启动时读取静默群列表，保存时保留手动维护的列表。"""
+
+    def __init__(self, path: str, logger: Logger):
+        super().__init__(path, logger)
+        # 启动时读取一次，运行期间手动修改列表需重启 bot 才能生效。
+        self._ensure_load()
+        if not isinstance(self.data, dict):
+            raise ValueError('工具数据库必须是 JSON 对象')
+        missing_silent_groups = 'silent_groups' not in self.data
+        # 读取默认值不会补写文件，首次缺键时显式落盘。
+        silent_groups = self.data.setdefault('silent_groups', [])
+        if not isinstance(silent_groups, list) or any(
+            type(group_id) is not int or group_id <= 0 for group_id in silent_groups
+        ):
+            raise ValueError('silent_groups 必须是正整数群号列表')
+        if missing_silent_groups:
+            self.save()
+
+    def save(self):
+        try:
+            self._ensure_load()
+            saved_data = self.data.copy()
+            if os.path.exists(self.path):
+                disk_data = load_json(self.path)
+                if not isinstance(disk_data, dict):
+                    raise ValueError('工具数据库必须是 JSON 对象')
+                # 保存快照时保留磁盘中的手动列表，避免覆盖；运行状态仍使用启动时缓存。
+                saved_data['silent_groups'] = disk_data.get('silent_groups', [])
+            dump_json(saved_data, self.path)
+            self.logger.debug(f'保存数据库 {self.path}')
+        except:
+            self.logger.print_exc(f'保存数据库 {self.path} 失败')
+
+
 _file_dbs: Dict[str, FileDB] = {}
 def get_file_db(path: str, logger: Logger) -> FileDB:
     global _file_dbs
     if path not in _file_dbs:
-        _file_dbs[path] = FileDB(path, logger)
+        db_type = UtilsFileDB if path == 'data/utils/db.json' else FileDB
+        _file_dbs[path] = db_type(path, logger)
     return _file_dbs[path]
 
 utils_file_db = get_file_db('data/utils/db.json', utils_logger)

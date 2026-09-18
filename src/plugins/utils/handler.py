@@ -9,7 +9,9 @@ from nonebot import on_command
 from nonebot import get_bot as nb_get_bot
 from nonebot import get_bots as nb_get_bots
 from nonebot.rule import to_me as rule_to_me
-from nonebot.message import handle_event
+from nonebot.message import handle_event, run_preprocessor
+from nonebot.matcher import Matcher
+from nonebot.exception import IgnoredException, MockApiException
 from nonebot.compat import model_dump, type_validate_python
 from nonebot.adapters.onebot.v11 import (
     Bot, 
@@ -23,6 +25,7 @@ from nonebot.adapters.onebot.v11.event import Sender, Reply
 from nonebot.adapters.onebot.v11.message import MessageSegment, Message
 import nonebot.adapters.onebot.v11.bot as bot_module
 from argparse import ArgumentParser
+from inspect import signature
 import requests
 
 
@@ -852,12 +855,44 @@ def check_in_blacklist(user_id: int):
     blacklist = utils_file_db.get('blacklist', [])
     return int(user_id) in blacklist or int(user_id) in HARDCODED_BLACKLIST_USERS
 
+def check_group_silent(group_id: int) -> bool:
+    """静默模式只由工具数据库中手动维护的 silent_groups 控制。"""
+    return int(group_id) in utils_file_db.get('silent_groups', [])
+
+
 def check_group_disabled(group_id: int):
     """
     检查群聊是否被全局禁用
     """
+    # 静默群视为已启用，仍允许后台加图；发送限制独立检查。
+    if check_group_silent(group_id):
+        return False
     enabled_groups = utils_file_db.get('enabled_groups', [])
     return int(group_id) not in enabled_groups
+
+
+# 仅普通加图和后台记录响应器可以在静默群运行，不受超级用户权限影响。
+SILENT_ALLOWED_MATCHERS: set[type[Matcher]] = set()
+
+
+@run_preprocessor
+async def _check_silent_matcher(event: Event, matcher: Matcher):
+    group_id = getattr(event, 'group_id', None)
+    if group_id is not None and check_group_silent(group_id):
+        if type(matcher) not in SILENT_ALLOWED_MATCHERS:
+            raise IgnoredException('静默群仅接受 /加图')
+
+
+@Bot.on_calling_api
+async def _check_silent_send_api(bot: Bot, api: str, data: dict):
+    # API 层兜住直接调用、定时任务和 RPC，包括普通消息、转发及文件通知。
+    if not isinstance(bot, Bot) or not (api.startswith('send_') or api == 'upload_group_file'):
+        return
+    group_id = data.get('group_id')
+    if group_id is None:
+        return
+    if check_group_silent(group_id):
+        raise MockApiException(result=None)
 
 def check_group_disabled_by_event(event: MessageEvent):
     """
@@ -976,7 +1011,17 @@ def send_msg_func(func):
     """
     发送消息函数的装饰器
     """
+    func_signature = signature(func)
+
     async def wrapper(*args, **kwargs):
+        arguments = func_signature.bind(*args, **kwargs).arguments
+        event = arguments.get('event')
+        group_id = arguments.get('group_id')
+        if event is not None and is_group_msg(event):
+            group_id = event.group_id
+        # 在准备图片和计数前退出，静默请求不占用其他群的发送额度。
+        if group_id is not None and check_group_silent(group_id):
+            return None
         # 检查消息发送次数限制
         cur_ts = int(datetime.now().timestamp())
         global _current_msg_count, _current_msg_second
@@ -2368,6 +2413,8 @@ class CmdHandler:
                 if self.disabled:
                     return
 
+                silent = is_group_msg(event) and check_group_silent(event.group_id)
+
                 # 安全模式
                 if on_safe_mode() and not check_superuser(event):
                     return
@@ -2404,7 +2451,8 @@ class CmdHandler:
                             return
 
                     # 每日上限检查
-                    if not check_send_msg_daily_limit(int(bot.self_id)) and not check_superuser(event, **self.superuser_check):
+                    # 后台加图不发送消息，不应被消息发送日上限阻断。
+                    if not silent and not check_send_msg_daily_limit(int(bot.self_id)) and not check_superuser(event, **self.superuser_check):
                         return
 
                     # cd检查

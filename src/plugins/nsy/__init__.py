@@ -647,7 +647,13 @@ class NsyManager:
             except Exception as e:
                 logger.warning(f'加载别名索引 gallery={gallery} 失败: {get_exc_desc(e)}')
 
-        self.pid_top = max(self.images_by_pid, default=0)
+        # 持久化分配上限，删除最高 PID 后重载或重启也不能复用旧编号。
+        self.pid_top = max(
+            self.pid_top,
+            int(file_db.get('pid_top', 0)),
+            max(self.images_by_pid, default=0),
+        )
+        file_db.set('pid_top', self.pid_top)
         logger.info(
             f'成功加载图库索引: {len(self.aliases_by_gallery)}个图库, '
             f'{len(self.images_by_pid)}张图片, {len(self.gallery_by_alias)}个别名, '
@@ -706,100 +712,93 @@ class NsyManager:
         while True:
             self.pid_top += 1
             if self.pid_top not in self.images_by_pid and not self._pid_file_exists(self.pid_top):
+                # 先保留编号；即使后续加图失败，也不把已分配的 PID 用于其他图片。
+                file_db.set('pid_top', self.pid_top)
                 return self.pid_top
 
     @staticmethod
     def _reload_file_sort_key(path: Path) -> tuple:
-        """数字文件名按数值排序，其余文件名按文本排序，保证重载编号稳定。"""
-        if path.stem.isdigit():
+        """数字文件名按数值排序，其余文件名按文本排序，保证扫描顺序稳定。"""
+        if path.stem.isascii() and path.stem.isdecimal():
             return 0, int(path.stem), path.suffix.lower(), path.name
         return 1, path.name
 
-    @staticmethod
-    def _reload_candidate_sort_key(candidate: ReloadImageCandidate) -> tuple:
-        """
-        按添加时间生成重载编号顺序，并为时间相同或缺失的记录提供稳定顺序。
+    def _prepare_reload_candidates(
+        self, candidates: list[ReloadImageCandidate],
+    ) -> list[str]:
+        """以文件编号分组，优先保留旧记录；仅为冲突或无编号文件分配新编号。"""
+        numbered: dict[int, list[ReloadImageCandidate]] = {}
+        unnumbered: list[ReloadImageCandidate] = []
+        matched_old_pids = {
+            item.old_image.pid for item in candidates if item.old_image is not None
+        }
+        for item in candidates:
+            stem = item.path.stem
+            if stem.isascii() and stem.isdecimal() and int(stem) > 0:
+                numbered.setdefault(int(stem), []).append(item)
+            elif item.old_image is not None:
+                numbered.setdefault(item.old_image.pid, []).append(item)
+            else:
+                unnumbered.append(item)
 
-        旧索引可能没有 created_at。此类记录视为早期遗留图片，排在有明确
-        时间的记录之前；同一时间优先保持旧 pid 顺序，新发现的图片则依靠
-        Python 稳定排序保留磁盘扫描顺序。
-        """
-        created_at = candidate.created_at.strip()
-        try:
-            created_time = datetime.strptime(created_at, CREATED_AT_FORMAT)
-            has_created_at = True
-        except ValueError:
-            created_time = datetime.min
-            has_created_at = False
-
-        old_pid = candidate.old_image.pid if candidate.old_image is not None else 0
-        return (
-            has_created_at,
-            created_time,
-            candidate.old_image is None,
-            old_pid,
-        )
-
-    def _renumber_reload_files(self, candidates: list[ReloadImageCandidate]) -> list[str]:
-        """
-        将所有有效图片全局连续编号，并用两阶段重命名避免文件名交换时覆盖。
-
-        第一阶段把需要改名的图片移到同目录临时文件；第二阶段再统一移到
-        pid.ext。若任一阶段失败，会尽量恢复所有原文件名后抛出异常。
-        """
-        source_paths = {osp.abspath(str(candidate.path)) for candidate in candidates}
-        moves: list[tuple[ReloadImageCandidate, Path, Path, Path]] = []
-        renamed_files: list[str] = []
-
-        for pid, candidate in enumerate(candidates, 1):
-            candidate.pid = pid
-            target = candidate.path.parent / f'{pid}{candidate.info.ext}'
-            if target.exists() and osp.abspath(str(target)) not in source_paths:
-                raise ReplyException(
-                    f'重载失败: 目标文件 {candidate.gallery}/{target.name} '
-                    '被无效图片或其他文件占用'
-                )
-            if osp.abspath(str(target)) == osp.abspath(str(candidate.path)):
+        # 原路径消失时，编号和内容均相同才继承旧元数据，识别跨图库移动。
+        # 多份同编号文件优先选择匹配旧内容的一份，其余按新增冲突图片处理。
+        for pid, items in numbered.items():
+            old = self.images_by_pid.get(pid)
+            if old is None or pid in matched_old_pids:
                 continue
+            for item in items:
+                if item.old_image is None and _sha256_file(str(item.path)) == old.hash:
+                    item.old_image = old
+                    item.created_at = old.created_at
+                    matched_old_pids.add(pid)
+                    break
 
-            temp = candidate.path.parent / f'.nsy_reload_{pid}.tmp'
-            suffix = 0
-            while temp.exists():
-                suffix += 1
-                temp = candidate.path.parent / f'.nsy_reload_{pid}_{suffix}.tmp'
-            moves.append((candidate, candidate.path, target, temp))
-            renamed_files.append(
-                f'{candidate.gallery}/{candidate.path.name} -> {target.name}'
-            )
+        # 先保留磁盘上所有有效编号，再分配新编号，避免先扫描的新图抢号。
+        self.pid_top = max(self.pid_top, max(numbered, default=0))
+        file_db.set('pid_top', self.pid_top)
+        for pid, items in numbered.items():
+            items.sort(key=lambda item: (
+                not (item.old_image is not None and item.old_image.pid == pid),
+                item.old_image is None,
+                str(item.path),
+            ))
+            items[0].pid = pid
+            unnumbered.extend(items[1:])
+        for item in unnumbered:
+            item.pid = self._allocate_pid()
 
-        staged: list[tuple[ReloadImageCandidate, Path, Path, Path]] = []
+        moves: list[tuple[ReloadImageCandidate, Path, Path]] = []
+        moving_paths = {
+            item.path for item in candidates if item.path.stem != str(item.pid)
+        }
+        for item in candidates:
+            # 保留规范数字文件名；冲突、前导零和无编号文件统一为 pid.ext。
+            if item.path.stem == str(item.pid):
+                continue
+            target = item.path.with_name(f'{item.pid}{item.info.ext}')
+            if os.path.lexists(target) and target not in moving_paths:
+                # 无效图片等未入索引文件也不可覆盖。
+                item.pid = self._allocate_pid()
+                target = item.path.with_name(f'{item.pid}{item.info.ext}')
+            moves.append((item, item.path, target))
+
+        # 先把冲突文件移到全新编号，再让原索引文件占用它保留的规范文件名。
+        moves.sort(key=lambda move: move[2] in moving_paths)
+        completed: list[tuple[ReloadImageCandidate, Path, Path]] = []
         try:
-            for move in moves:
-                _, source, _, temp = move
-                os.rename(source, temp)
-                staged.append(move)
+            for item, source, target in moves:
+                if os.path.lexists(target):
+                    raise ReplyException(f'重载失败: 目标文件 {item.gallery}/{target.name} 已存在')
+                os.rename(source, target)
+                item.path = target
+                completed.append((item, source, target))
         except Exception:
-            for _, source, _, temp in reversed(staged):
-                os.rename(temp, source)
+            for item, source, target in reversed(completed):
+                os.rename(target, source)
+                item.path = source
             raise
-
-        finalized: list[tuple[ReloadImageCandidate, Path, Path, Path]] = []
-        try:
-            for move in moves:
-                candidate, _, target, temp = move
-                os.rename(temp, target)
-                candidate.path = target
-                finalized.append(move)
-        except Exception:
-            for candidate, _, target, temp in finalized:
-                os.rename(target, temp)
-                candidate.path = temp
-            for candidate, source, _, temp in moves:
-                os.rename(temp, source)
-                candidate.path = source
-            raise
-
-        return renamed_files
+        return [f'{item.gallery}/{source.name} -> {target.name}' for item, source, target in moves]
 
     @staticmethod
     def _recompress_reload_pngs(
@@ -1669,9 +1668,10 @@ class NsyManager:
         以 data/nsy 的实际目录同步 aliases 总表并重建图片索引。
 
         - 每个现有目录都会写入 aliases 总表，原有有效别名会保留；
-        - 所有有效图片按 created_at 从早到晚全局重新编号为 1...N，并重命名为 pid.ext；
+        - 优先使用文件编号作为 PID，冲突时原索引对应图片优先保留编号；
         - 索引中有、文件已不存在的图片会从索引移除；
-        - 文件存在但索引缺失的图片会加入索引；
+        - 冲突和无编号图片分配新编号并同步重命名，自动分配不回填历史空缺；
+        - 按真实 inode 重建硬链接关系，保留有效旧根，缺失根由现存成员替代；
         - 大于等于 1 MiB 的静态、无透明通道、最低压缩级别 PNG 会无损重压；
         - 已有索引直接复用 SHA-256 和 pHash，仅新物理文件计算特征；
         - 指向不存在图库的别名会被删除。
@@ -1691,6 +1691,9 @@ class NsyManager:
             gallery_dir = Path(self._gallery_dir(gallery))
             paths = sorted(gallery_dir.iterdir(), key=self._reload_file_sort_key)
             for path in paths:
+                if path.is_symlink():
+                    invalid_files.append(f'{gallery}/{path.name}: 不支持符号链接，请使用图片文件或硬链接')
+                    continue
                 if not path.is_file():
                     continue
                 try:
@@ -1712,26 +1715,37 @@ class NsyManager:
                     ),
                 ))
 
+        renamed_files = self._prepare_reload_candidates(candidates)
         (
             recompressed_hashes_by_inode,
             compressed_png_count,
             png_saved_bytes,
             png_compression_errors,
         ) = self._recompress_reload_pngs(candidates)
-        candidates.sort(key=self._reload_candidate_sort_key)
-        renamed_files = self._renumber_reload_files(candidates)
+        candidates.sort(key=lambda candidate: candidate.pid)
         new_images_by_gallery: dict[str, dict[int, NsyImage]] = {
             gallery: {} for gallery in gallery_names
         }
         new_images_by_pid: dict[int, NsyImage] = {}
         added_pids: list[int] = []
 
-        # 同一 inode 的多个目录项即为硬链接：最小 pid 作为根，其余均直接指向根。
+        # 同一 inode 的多个目录项才是真实硬链接，优先保留仍存在的旧根。
+        # 旧根文件缺失时，从存活成员选新根，不继承任何悬空的旧指向。
         root_pid_by_inode: dict[tuple[int, int], int] = {}
+        for candidate in sorted(candidates, key=lambda item: (
+            not (
+                item.old_image is not None
+                and item.old_image.linked_to_pid is None
+                and item.old_image.linked_pids
+            ),
+            not (item.old_image is not None and item.old_image.linked_to_pid is None),
+            item.pid,
+        )):
+            root_pid_by_inode.setdefault(candidate.inode, candidate.pid)
         linked_to_by_pid: dict[int, int] = {}
         linked_pids_by_root: dict[int, list[int]] = {}
         for candidate in candidates:
-            root_pid = root_pid_by_inode.setdefault(candidate.inode, candidate.pid)
+            root_pid = root_pid_by_inode[candidate.inode]
             if root_pid != candidate.pid:
                 linked_to_by_pid[candidate.pid] = root_pid
                 linked_pids_by_root.setdefault(root_pid, []).append(candidate.pid)
@@ -1781,32 +1795,38 @@ class NsyManager:
             )
             new_images_by_gallery[candidate.gallery][candidate.pid] = image
             new_images_by_pid[candidate.pid] = image
-            if old_image is None:
+            if old_image is None or old_image.pid != candidate.pid:
                 added_pids.append(candidate.pid)
 
         retained_old_pids = {
             candidate.old_image.pid
             for candidate in candidates
-            if candidate.old_image is not None
+            if candidate.old_image is not None and candidate.old_image.pid == candidate.pid
         }
         removed_pids = sorted(set(old_images) - retained_old_pids)
         removed_aliases = sorted(
             alias
             for gallery, aliases in self.aliases_by_gallery.items()
-            if gallery not in gallery_names
             for alias in aliases
+            if gallery not in gallery_names or alias in gallery_names
         )
-        for alias in removed_aliases:
-            del self.gallery_by_alias[alias]
         self.aliases_by_gallery = {
-            gallery: self.aliases_by_gallery.get(gallery, [])
+            gallery: [
+                alias for alias in self.aliases_by_gallery.get(gallery, [])
+                if alias not in gallery_names
+            ]
             for gallery in gallery_names
+        }
+        # 实际目录名优先，移除与新图库名冲突的旧别名并重建反向索引。
+        self.gallery_by_alias = {
+            alias: gallery
+            for gallery, aliases in self.aliases_by_gallery.items()
+            for alias in aliases
         }
 
         self._validate_hardlink_index(new_images_by_pid)
         self.images_by_gallery = new_images_by_gallery
         self.images_by_pid = new_images_by_pid
-        self.pid_top = len(self.images_by_pid)
         self._save_index()
         self._save_aliases()
         return {
@@ -2248,6 +2268,11 @@ async def _handle_nsy_add(ctx: HandlerContext, force: bool = False):
 
     report_items = [*rejections, *phash_links]
     staged_paths = {item.staged_path for item in report_items}
+    if ctx.group_id is not None and check_group_silent(ctx.group_id):
+        # 加图及日志已完成；静默群不生成回复报告，也不注册需要回复的撤销操作。
+        for path in staged_paths:
+            remove_file(path)
+        return
     try:
         groups = _build_upload_similarity_groups(
             manager,
@@ -2323,6 +2348,7 @@ async def _handle_nsy_add(ctx: HandlerContext, force: bool = False):
 
 
 nsy_add = _nsy_cmd(['/加图'])
+SILENT_ALLOWED_MATCHERS.add(nsy_add.handler)
 @nsy_add.handle()
 async def _(ctx: HandlerContext):
     await _handle_nsy_add(ctx)
@@ -2345,10 +2371,10 @@ async def _(ctx: HandlerContext):
     await ctx.asend_fold_msg_adaptive(msg.strip())
 
 
-nsy_create_gallery = _nsy_cmd(['/加图库'])
+nsy_create_gallery = _nsy_cmd(['/加图库', '/新建图库'])
 @nsy_create_gallery.handle()
 async def _(ctx: HandlerContext):
-    names = _parse_many_args(ctx, '/加图库 图库名称...')
+    names = _parse_many_args(ctx, f'{ctx.trigger_cmd} 图库名称...')
     manager = NsyManager.get()
     results = _batch_create_galleries(manager, names)
     for name, success, message in results:
@@ -2488,7 +2514,8 @@ async def _(ctx: HandlerContext):
             '重载图库 '
             f'galleries={result["gallery_count"]} images={result["image_count"]} '
             f'added={result["added_pids"]} removed={result["removed_pids"]} '
-            f'renamed={len(result["renamed_files"])} invalid={len(result["invalid_files"])} '
+            f'invalid={len(result["invalid_files"])} '
+            f'renamed={len(result["renamed_files"])} '
             f'compressed_png={result["compressed_png_count"]} '
             f'png_saved_bytes={result["png_saved_bytes"]} '
             f'png_compression_errors={len(result["png_compression_errors"])} '
