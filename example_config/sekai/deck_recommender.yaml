@@ -1,0 +1,7 @@
+# 独立组卡推荐服务的监听与缓存配置；仅在 sekai.enabled 和 deck_enabled 均开启时启动。
+# 对外提供服务时，在真实 config 中设置监听地址，并配置 sekai.deck.servers。
+host: "localhost"
+port: 8000
+data_dir: "data/sekai/deck_recommender"
+worker_num: 1
+userdata_cache_num: 100
