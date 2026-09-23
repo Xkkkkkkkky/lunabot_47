@@ -1,6 +1,239 @@
 # PJSK 总开关。关闭后不加载插件后台任务，独立组卡及榜线服务也拒绝启动；修改后需重启相关进程。
 enabled: false
 
+# 轻量模式开关；开启后仅响应下方显式开启的指令。关闭时保留原有指令响应范围。
+# 指令响应开关修改后需重启生效；帮助显示按当前配置更新。
+# 缺失项视为关闭，别名及区服/WL前缀共用开关。
+# enabled、ranking_enabled、deck_enabled、区服及群白名单等原有限制仍然生效。
+# 帮助按当前轻量模式及逐指令开关动态筛选；后台数据更新和已有订阅通知不受影响。
+sekai-light: false
+light_commands:
+  # 账号设置
+  account:
+    # /pjsk默认服务器
+    default_region: false
+    # /pjsk bind
+    pjsk_bind: false
+    # /pjsk unbind
+    pjsk_unbind: false
+    # /pjsk set main
+    pjsk_set_main: false
+    # /pjsk swap bind
+    pjsk_swap_bind: false
+    # /pjsk hide suite
+    pjsk_hide_suite: false
+    # /pjsk show suite
+    pjsk_show_suite: false
+    # /pjsk hide id
+    pjsk_hide_id: false
+    # /pjsk show id
+    pjsk_show_id: false
+    # /pjsk check service
+    pjsk_check_service: false
+    # /pjsk check data
+    pjsk_check_data: false
+    # /pjsk verify
+    verify_game_account: false
+    # /pjsk verify list
+    get_verified_uids: false
+    # /抓包帮助
+    upload_help: false
+
+  # 个人信息
+  profile:
+    # /pjsk profile
+    pjsk_info: false
+    # /pjsk reg time
+    pjsk_reg_time: false
+    # /pjsk upload profile bg
+    upload_profile_bg: false
+    # /pjsk clear profile bg
+    clear_profile_bg: false
+    # /pjsk adjust profile
+    adjust_profile_bg: false
+
+  # 养成
+  education:
+    # /pjsk challenge info
+    pjsk_challenge_info: false
+    # /pjsk power bonus info
+    pjsk_power_bonus_info: false
+    # /pjsk area item
+    pjsk_area_item: false
+    # /pjsk bonds
+    pjsk_bonds: false
+    # /pjsk leader count
+    pjsk_leader_count: false
+
+  # 虚拟Live
+  vlive:
+    # /pjsk live
+    pjsk_live: false
+
+  # 活动
+  event:
+    # /pjsk event
+    pjsk_event: false
+    # /pjsk event story
+    pjsk_event_story: false
+    # /pjsk event record
+    pjsk_event_record: false
+
+  # 歌曲谱面
+  music:
+    # /pjsk chart
+    pjsk_chart: false
+    # /pjsk alias add
+    pjsk_alias_set: false
+    # /pjsk alias
+    pjsk_alias: false
+    # /pjsk alias del
+    pjsk_alias_del: false
+    # /pjsk song
+    pjsk_song: false
+    # /pjsk note num
+    pjsk_note_num: false
+    # /pjsk song list
+    pjsk_music_list: false
+    # /pjsk progress
+    pjsk_play_progress: false
+    # /sync music alias
+    pjsk_sync_music_alias: false
+    # /pjsk music rewards
+    pjsk_music_rewards: false
+    # /pjsk bpm
+    pjsk_bpm: false
+    # /pjsk music cover
+    pjsk_music_cover: false
+    # /pjsk b30
+    pjsk_best30: false
+    # /pjsk music meta
+    pjsk_music_meta: false
+    # /pjsk music board
+    pjsk_music_board: false
+
+  # 卡牌
+  card:
+    # /pjsk chara alias
+    pjsk_chara_alias: false
+    # /card
+    pjsk_card: false
+    # /pjsk card img
+    pjsk_card_img: false
+    # /pjsk card story
+    pjsk_card_story: false
+    # /pjsk box
+    pjsk_box: false
+    # /pjsk gacha
+    pjsk_gacha: false
+    # /pjsk gacha record
+    pjsk_gacha_record: false
+    # /提取卡牌
+    extract_card: false
+
+  # 组卡
+  deck:
+    # /pjsk event card
+    pjsk_event_deck: false
+    # /pjsk challenge card
+    pjsk_challenge_deck: false
+    # /pjsk no event deck
+    pjsk_no_event_deck: false
+    # /pjsk bonus deck
+    pjsk_bonus_deck: false
+    # /mysekai deck
+    mysekai_deck: false
+    # /实效
+    pjsk_score_up: false
+
+  # 榜线分数
+  ranking:
+    # /pjsk score
+    pjsk_score_control: false
+    # /pjsk custom room score
+    pjsk_custom_room_score_control: false
+    # /pjsk sk predict
+    pjsk_skp: false
+    # /pjsk sk line
+    pjsk_skl: false
+    # /pjsk sk speed
+    pjsk_sks: false
+    # /pjsk sk daily speed
+    pjsk_skds: false
+    # /pjsk sk board
+    pjsk_sk: false
+    # /cf
+    pjsk_cf: false
+    # /csb
+    pjsk_csb: false
+    # /ptr
+    pjsk_ptr: false
+    # /rtr
+    pjsk_rtr: false
+    # /pjsk winrate predict
+    pjsk_winrate: false
+
+  # 表情
+  stamp:
+    # /pjsk stamp
+    pjsk_stamp: false
+    # /pjsk rand stamp
+    pjsk_rand_stamp: false
+    # /pjsk stamp refresh
+    pjsk_stamp_refresh: false
+    # /pjsk stamp refresh batch
+    pjsk_stamp_refresh_batch: false
+    # /pjsk stamp base
+    pjsk_stamp_base: false
+    # /pjsk remove stamp base
+    pjsk_stamp_base_delete: false
+
+  # 娱乐
+  entertainment:
+    # /pjsk entertainment limit
+    pjsk_entertainment_limit: false
+    # /pjsk entertainment count
+    pjsk_entertainment_limit_check: false
+    # /pjsk guess cover
+    pjsk_guess_cover: false
+    # /pjsk guess chart
+    pjsk_guess_chart: false
+    # /pjsk guess card
+    pjsk_guess_card: false
+    # /pjsk guess music
+    pjsk_guess_music: false
+    # /单抽
+    pjsk_spin_gacha: false
+
+  # 其他
+  misc:
+    # /pjsk update
+    pjsk_update: false
+    # /pjsk ng
+    ngword: false
+    # /pjsk chara birthday
+    chara_bd: false
+    # /pjsk detail
+    heyiwei: false
+    # /pjsk blacklist add
+    pjsk_blacklist: false
+    # /pjsk blacklist remove
+    pjsk_blacklist_remove: false
+    # /pjsk user sta
+    pjsk_user_sta: false
+    # /pjsk bind history
+    pjsk_bind_history: false
+    # /pjsk group sub
+    sekai_group_sub: false
+    # /pjsk group unsub
+    sekai_group_unsub: false
+    # /sekai on
+    group_on: false
+    # /sekai off
+    group_off: false
+    # /sekai status
+    group_status: false
+
 # 榜线查询/预测与独立榜线记录服务，需同时开启总开关。
 ranking_enabled: false
 # 组卡与控分模块指令、组卡数据同步和独立组卡后端，需同时开启总开关。
@@ -157,7 +390,7 @@ sk:
     ranks:  # 应用高精度的排名档位范围
       jp: [[1, 10]]
     uids:   # 应用高精度的uid列表
-      jp: ["12344532534324132"]
+      jp: []
   record_interval_tolerance: 70  # 超过该容差认为有记录丢失
 
   plot_point_num_limit: 5000

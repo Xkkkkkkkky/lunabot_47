@@ -87,8 +87,8 @@ class SekaiGroupSubHelper:
 
 sekai_group_sub = SekaiCmdHandler([
     "/pjsk group sub", "/pjsk 群订阅", "/pjsk 群聊订阅", "/pjsk 开启",
-])
-sekai_group_sub.check_cdrate(cd).check_wblist(gbl).check_superuser()
+], command_key='misc.sekai_group_sub')
+sekai_group_sub.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @sekai_group_sub.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -110,8 +110,8 @@ async def _(ctx: SekaiHandlerContext):
 
 sekai_group_unsub = SekaiCmdHandler([
     "/pjsk group unsub", "/pjsk 取消群订阅", "/pjsk 取消群聊订阅", "/pjsk 关闭",
-])
-sekai_group_unsub.check_cdrate(cd).check_wblist(gbl).check_superuser()
+], command_key='misc.sekai_group_unsub')
+sekai_group_unsub.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @sekai_group_unsub.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()

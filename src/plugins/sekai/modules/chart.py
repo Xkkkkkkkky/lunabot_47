@@ -71,6 +71,7 @@ async def generate_music_chart(
 
     asset_name = music['assetbundleName']
     jacket = await ctx.rip.img(f"music/jacket/{asset_name}_rip/{asset_name}.png")
+    jacket_missing = is_missing_resource_image(jacket)
     jacket = get_image_b64(jacket)
 
     note_host = os.path.abspath(f'{CHART_ASSET_DIR}/notes')
@@ -130,7 +131,8 @@ async def generate_music_chart(
             img = resize_keep_ratio(img, max_size=MAX_RES[0] * MAX_RES[1], mode='wxh')
         logger.info(f'生成 mid={music_id} {difficulty} 谱面图片完成')
 
-        if use_cache:
+        # 缺失封面的谱面不持久缓存，素材恢复后下次请求重新绘制。
+        if use_cache and not jacket_missing:
             img.save(cache_path)
         return img
 
@@ -142,8 +144,8 @@ pjsk_chart = SekaiCmdHandler([
     "/pjsk chart",
     "/谱面查询", "/铺面查询", "/谱面预览", "/铺面预览", "/谱面", "/铺面", "/查谱面", "/查铺面", "/查谱",
     "/技能预览", 
-])
-pjsk_chart.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_chart')
+pjsk_chart.check_cdrate(cd).check_wblist(gwl)
 @pjsk_chart.handle()
 async def _(ctx: SekaiHandlerContext):
     query = ctx.get_args().strip()

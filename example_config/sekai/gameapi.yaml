@@ -1,6 +1,7 @@
 # 日服
 jp:
   # 游戏 API 地址仅填写在真实 config 中，示例不携带占位网址。
+  api_status_url:               ""  # 游戏 API 状态
   profile_api_url:                ""  # 游戏API: 获取用户profile
   suite_api_url:                  ""  # 游戏API: 获取用户suite
   ranking_top100_api_url:         ""  # Haruki 游戏API: 活动 Top100
@@ -14,4 +15,29 @@ jp:
 
 # 台服（繁中）
 tw:
-  # ...
+  api_status_url: ""
+  profile_api_url: ""
+  suite_api_url: ""
+  ranking_top100_api_url: ""
+  ranking_border_api_url: ""
+
+en:
+  api_status_url: ""
+  profile_api_url: ""
+  suite_api_url: ""
+  ranking_top100_api_url: ""
+  ranking_border_api_url: ""
+
+kr:
+  api_status_url: ""
+  profile_api_url: ""
+  suite_api_url: ""
+  ranking_top100_api_url: ""
+  ranking_border_api_url: ""
+
+cn:
+  api_status_url: ""
+  profile_api_url: ""
+  suite_api_url: ""
+  ranking_top100_api_url: ""
+  ranking_border_api_url: ""

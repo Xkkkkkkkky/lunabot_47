@@ -20,16 +20,16 @@ query:
     languages:
       - code: "zh"
         label: "中文"
-        api_url: "https://zh.wikipedia.org/w/api.php"
+        api_url: ""
         variant: "zh-cn"
       - code: "en"
         label: "英文"
-        api_url: "https://en.wikipedia.org/w/api.php"
+        api_url: ""
       - code: "ja"
         label: "日文"
-        api_url: "https://ja.wikipedia.org/w/api.php"
-    # Wikimedia 要求可识别的 User-Agent；仓库地址作为公开联系方式。
-    user_agent: "LunaBot_47/1.0 (https://github.com/Xkkkkkkkky/lunabot_47)"
+        api_url: ""
+    # Wikimedia 要求可识别的 User-Agent；请在真实 config 中填写联系信息。
+    user_agent: ""
     proxy: ""            # 显式 HTTP(S) 代理；留空后才考虑 use_env_proxy
     use_env_proxy: true  # proxy 为空时是否读取 HTTP(S)_PROXY/NO_PROXY
     timeout_seconds: 20  # 每次 Wiki API 请求的总超时
@@ -67,8 +67,8 @@ recognition:
     max_edge: 2400      # 上传前等比缩放后的最长边上限（像素）
     max_pixels: 40000000 # 解码输入图的总像素安全上限，防止超大图片耗尽内存
   web:
-    # 端点来自 whatbird.cn 当前网页脚本：先 /upload，再向 /bird 提交 image_id。
-    base_url: "https://whatbird.cn/" # 网页服务根地址
+    # 网页识别端点先上传图片，再提交 image_id；服务地址只写在真实 config。
+    base_url: ""# 网页服务根地址
     upload_path: "/upload"           # 图片上传路径，返回 imageId
     classify_path: "/bird"           # 使用 image_id 分类的路径
     image_path_prefix: "/avatar"     # 结果中相对代表图路径的前缀

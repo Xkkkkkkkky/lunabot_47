@@ -1664,7 +1664,7 @@ async def compose_deck_recommend_image(
                 custom_text = f"+{bonus}%"
             return await get_card_full_thumbnail(ctx, card, pcard=pcard, custom_text=custom_text)
         except: 
-            return UNKNOWN_IMG
+            return create_missing_resource_image(f"card/{card['id']}/full_thumbnail")
     card_imgs, card_keys = [], []
     for deck in result_decks:
         for deckcard in deck.cards:
@@ -2032,7 +2032,7 @@ async def compose_deck_recommend_image(
     add_watermark(canvas)
 
     with ProfileTimer("deckrec.draw"):
-        img = await canvas.get_img()
+        img = await render_sekai_canvas(canvas)
 
     return img
 
@@ -2046,8 +2046,8 @@ pjsk_event_deck = SekaiCmdHandler([
     "/组卡", "/组队", "/配队", 
     "/指定属性组卡", "/指定属性组队", "/指定属性卡组", "/指定属性配队",
     "/模拟组卡", "/模拟配队", "/模拟组队", "/模拟卡组",
-])
-pjsk_event_deck.check_cdrate(cd).check_wblist(gbl)
+], command_key='deck.pjsk_event_deck')
+pjsk_event_deck.check_cdrate(cd).check_wblist(gwl)
 @pjsk_event_deck.handle()
 async def _(ctx: SekaiHandlerContext):
     with ProfileTimer("deckrec.total"):
@@ -2064,8 +2064,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_challenge_deck = SekaiCmdHandler([
     "/pjsk challenge card", "/pjsk challenge deck",
     "/挑战组卡", "/挑战组队", "/挑战卡组", "/挑战配队",
-])
-pjsk_challenge_deck.check_cdrate(cd).check_wblist(gbl)
+], command_key='deck.pjsk_challenge_deck')
+pjsk_challenge_deck.check_cdrate(cd).check_wblist(gwl)
 @pjsk_challenge_deck.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(
@@ -2082,8 +2082,8 @@ pjsk_no_event_deck = SekaiCmdHandler([
     "/pjsk no event deck", "/pjsk best deck",
     "/长草组卡", "/长草组队", "/长草卡组", "/长草配队", 
     "/最强卡组", "/最强组卡", "/最强组队", "/最强配队",
-])
-pjsk_no_event_deck.check_cdrate(cd).check_wblist(gbl)
+], command_key='deck.pjsk_no_event_deck')
+pjsk_no_event_deck.check_cdrate(cd).check_wblist(gwl)
 @pjsk_no_event_deck.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(
@@ -2100,8 +2100,8 @@ pjsk_bonus_deck = SekaiCmdHandler([
     "/pjsk bonus deck", "/pjsk bonus card",
     "/加成组卡", "/加成组队", "/加成卡组", "/加成配队",
     "/控分组卡", "/控分组队", "/控分卡组", "/控分配队",
-])
-pjsk_bonus_deck.check_cdrate(cd).check_wblist(gbl)
+], command_key='deck.pjsk_bonus_deck')
+pjsk_bonus_deck.check_cdrate(cd).check_wblist(gwl)
 @pjsk_bonus_deck.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(
@@ -2118,8 +2118,8 @@ mysekai_deck = SekaiCmdHandler([
     "/mysekai deck", "/pjsk mysekai deck",
     "/烤森组卡", "/烤森组队", "/烤森卡组", "/烤森配队",
     "/ms组卡", "/ms组队", "/ms卡组", "/ms配队",
-])
-mysekai_deck.check_cdrate(cd).check_wblist(gbl)
+], command_key='deck.mysekai_deck')
+mysekai_deck.check_cdrate(cd).check_wblist(gwl)
 @mysekai_deck.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(
@@ -2132,10 +2132,10 @@ async def _(ctx: SekaiHandlerContext):
 
 
 # 实效计算
-pjsk_score_up = CmdHandler([
+pjsk_score_up = SekaiPlainCmdHandler([
     "/实效", "/倍率", "/时效", "/pjsk score up",
-], logger)
-pjsk_score_up.check_cdrate(cd).check_wblist(gbl)
+], logger, command_key='deck.pjsk_score_up')
+pjsk_score_up.check_cdrate(cd).check_wblist(gwl)
 @pjsk_score_up.handle()
 async def _(ctx: SekaiHandlerContext):
     try:

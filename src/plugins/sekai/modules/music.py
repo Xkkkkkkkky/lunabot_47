@@ -1233,7 +1233,7 @@ async def compose_music_detail_image(ctx: SekaiHandlerContext, mid: int, title: 
                     draw_vocal(964)
                     
     add_watermark(canvas)
-    return await canvas.get_img()    
+    return await render_sekai_canvas(canvas)
 
 # 合成歌曲列表图片
 async def compose_music_list_image(
@@ -1332,7 +1332,7 @@ async def compose_music_list_image(
                                         TextBox(f"{music['id']}", TextStyle(font=DEFAULT_FONT, size=16, color=BLACK)).set_w(64)
                                 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成打歌进度图片
 async def compose_play_progress_image(ctx: SekaiHandlerContext, diff: str, qid: int) -> Image.Image:
@@ -1434,7 +1434,7 @@ async def compose_play_progress_image(ctx: SekaiHandlerContext, diff: str, qid: 
                         TextBox(f"{ap}",    style, overflow='clip').set_size((w, item_h)).set_content_align('c').set_bg(roundrect_bg())
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 获取任意一个歌曲音频mp3地址
 async def get_music_audio_mp3_path(ctx: SekaiHandlerContext, mid: int) -> Optional[str]:
@@ -1556,7 +1556,7 @@ async def compose_music_brief_list_image(
                 TextBox(f"{hide_num}首歌曲未显示", TextStyle(font=DEFAULT_FONT, size=20, color=(20, 20, 20))).set_padding(8)
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成歌曲奖励图片
 async def compose_music_rewards_image(ctx: SekaiHandlerContext, qid: int) -> Image.Image:
@@ -1694,7 +1694,7 @@ async def compose_music_rewards_image(ctx: SekaiHandlerContext, qid: int) -> Ima
                                     .set_size((None, gh))
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 获取铺面bpm
 async def get_chart_bpm(ctx: SekaiHandlerContext, mid: int, timeout: float=5.0):
@@ -2120,7 +2120,7 @@ async def compose_best30_image(ctx: SekaiHandlerContext, qid: int, uid: str | No
                         ).set_padding((0, 4))
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 
 # ======================= 指令处理 ======================= #
@@ -2129,8 +2129,8 @@ async def compose_best30_image(ctx: SekaiHandlerContext, qid: int, uid: str | No
 pjsk_alias_set = SekaiCmdHandler([
     "/pjsk alias add", "/pjskalias add",
     "/添加歌曲别名", "/歌曲别名添加", 
-])
-pjsk_alias_set.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_alias_set')
+pjsk_alias_set.check_cdrate(cd).check_wblist(gwl)
 @pjsk_alias_set.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -2177,8 +2177,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_alias = SekaiCmdHandler([
     "/pjsk alias", "/music alias", 
     "/歌曲别名", "/查歌曲别名",
-])
-pjsk_alias.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_alias')
+pjsk_alias.check_cdrate(cd).check_wblist(gwl)
 @pjsk_alias.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -2202,8 +2202,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_alias_del = SekaiCmdHandler([
     "/pjsk alias del", "/pjskalias del",
     "/删除歌曲别名", "/歌曲别名删除",
-])
-pjsk_alias_del.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_alias_del')
+pjsk_alias_del.check_cdrate(cd).check_wblist(gwl)
 @pjsk_alias_del.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -2246,8 +2246,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_song = SekaiCmdHandler([
     "/pjsk song", "/pjsk music", "/song", "/music",
     "/查曲", "/查歌", "/歌曲", "/查歌曲",
-])
-pjsk_song.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_song')
+pjsk_song.check_cdrate(cd).check_wblist(gwl)
 @pjsk_song.handle()
 async def _(ctx: SekaiHandlerContext):
     query = ctx.get_args().strip()
@@ -2290,8 +2290,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_note_num = SekaiCmdHandler([
     "/pjsk note num", "/pjsk note count",
     "/物量", "/查物量",
-])
-pjsk_note_num.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_note_num')
+pjsk_note_num.check_cdrate(cd).check_wblist(gwl)
 @pjsk_note_num.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -2314,8 +2314,8 @@ async def _(ctx: SekaiHandlerContext):
 # 歌曲列表
 MUSIC_LIST_CMDS = ["/pjsk song list", "/pjsk music list", "/歌曲列表", "/歌曲一览",]
 MUSIC_CONSTANT_CMDS = ["/pjsk music constant", "/难度排行", "/定数表", '/歌曲定数',]
-pjsk_music_list = SekaiCmdHandler(MUSIC_LIST_CMDS + MUSIC_CONSTANT_CMDS)
-pjsk_music_list.check_cdrate(cd).check_wblist(gbl)
+pjsk_music_list = SekaiCmdHandler(MUSIC_LIST_CMDS + MUSIC_CONSTANT_CMDS, command_key='music.pjsk_music_list')
+pjsk_music_list.check_cdrate(cd).check_wblist(gwl)
 @pjsk_music_list.handle()
 async def _(ctx: SekaiHandlerContext):
     help_msg = """
@@ -2427,8 +2427,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_play_progress = SekaiCmdHandler([
     "/pjsk progress",
     "/pjsk进度", "/打歌进度", "/歌曲进度", "/打歌信息",
-])
-pjsk_play_progress.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_play_progress')
+pjsk_play_progress.check_cdrate(cd).check_wblist(gwl)
 @pjsk_play_progress.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -2440,11 +2440,11 @@ async def _(ctx: SekaiHandlerContext):
 
 
 # 同步歌曲别名
-pjsk_sync_music_alias = CmdHandler([
+pjsk_sync_music_alias = SekaiPlainCmdHandler([
     "/sync music alias", "/sma",
     "/同步歌曲别名", 
-], logger)
-pjsk_sync_music_alias.check_cdrate(cd).check_wblist(gbl).check_superuser()
+], logger, command_key='music.pjsk_sync_music_alias')
+pjsk_sync_music_alias.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @pjsk_sync_music_alias.handle()
 async def _(ctx: HandlerContext):
     await ctx.block(timeout=0)
@@ -2457,8 +2457,8 @@ async def _(ctx: HandlerContext):
 pjsk_music_rewards = SekaiCmdHandler([
     "/pjsk music rewards",
     "/歌曲奖励", "/打歌奖励", "/歌曲挖矿", "/打歌挖矿",
-])  
-pjsk_music_rewards.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_music_rewards')
+pjsk_music_rewards.check_cdrate(cd).check_wblist(gwl)
 @pjsk_music_rewards.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(
@@ -2470,8 +2470,8 @@ async def _(ctx: SekaiHandlerContext):
 # bpm查询
 pjsk_bpm = SekaiCmdHandler([
     "/pjsk bpm", "/查bpm", "/查BPM",
-])
-pjsk_bpm.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_bpm')
+pjsk_bpm.check_cdrate(cd).check_wblist(gwl)
 @pjsk_bpm.handle()
 async def _(ctx: SekaiHandlerContext):
     query = ctx.get_args().strip()
@@ -2502,8 +2502,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_music_cover = SekaiCmdHandler([
     "/pjsk music cover",
     "/查曲绘", "/曲绘",
-])
-pjsk_music_cover.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_music_cover')
+pjsk_music_cover.check_cdrate(cd).check_wblist(gwl)
 @pjsk_music_cover.handle()
 async def _(ctx: SekaiHandlerContext):
     query = ctx.get_args().strip()
@@ -2519,8 +2519,8 @@ async def _(ctx: SekaiHandlerContext):
 # best30
 pjsk_best30 = SekaiCmdHandler([
     "/pjsk b30", "/b30", "/pjsk rating",
-])
-pjsk_best30.check_cdrate(cd).check_wblist(gbl)
+], command_key='music.pjsk_best30')
+pjsk_best30.check_cdrate(cd).check_wblist(gwl)
 @pjsk_best30.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()

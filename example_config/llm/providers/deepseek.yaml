@@ -2,10 +2,10 @@
 qps_limit: 5  # 当前进程对该供应方的每秒请求上限
 # 余额同步检查间隔；该供应方当前不支持自动查余额，可填整数或四则运算表达式。
 quota_sync_interval_sec: 21600
-price_unit: "$"  # 价格和本地余额日志使用的显示单位
+price_unit: "￥"  # 价格和本地余额日志使用的显示单位
 # api_key 与自定义 base_url 均属于私密部署信息，只能填写在真实 config。
 api_key: ""
-base_url: "https://api.deepseek.com"
+base_url: ""
 
 models:
   # name 是 bot 内模型名；model_id 省略时直接把 name 发给上游。

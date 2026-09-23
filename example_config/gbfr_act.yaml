@@ -8,7 +8,8 @@ battle:
 
 websocket:
   enable: false
-  url: "ws://127.0.0.1:24399"
+  # 启用时在真实 config 中填写 WebSocket 服务地址。
+  url: ""
   heartbeat_seconds: 30
   reconnect_seconds: 5
   error_log_limit: 5

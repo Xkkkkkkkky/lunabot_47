@@ -1,5 +1,5 @@
-saucenao_apikey: "xxx"
-serp_apikey: "xxx"
+saucenao_apikey: ""  # 只在真实 config 中填写
+serp_apikey: ""  # 只在真实 config 中填写
 
 ytdlp:
   best_format: bestvideo+bestaudio/best

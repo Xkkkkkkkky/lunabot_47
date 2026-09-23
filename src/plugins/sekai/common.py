@@ -15,7 +15,25 @@ logger = get_logger("Sekai")
 file_db = get_file_db(f"{SEKAI_DATA_DIR}/db.json", logger)
 
 cd = ColdDown(file_db, logger)
-gbl = get_group_black_list(file_db, logger, 'sekai')
+
+
+def is_sekai_command_enabled(command_key: str) -> bool:
+    """启动时读取轻量模式开关；只有显式 true 才允许对应指令响应。"""
+    light_mode = config.get('sekai-light', False, raise_exc=False)
+    if not isinstance(light_mode, bool):
+        raise ValueError('配置 sekai.sekai.sekai-light 必须使用 true/false')
+    if not light_mode:
+        return True
+    return config.get(f'light_commands.{command_key}', False, raise_exc=False) is True
+
+
+# Sekai 与其他默认关闭的模块一致，仅允许已显式开启的群使用。
+gwl = get_group_white_list(file_db, logger, 'sekai')
+# 白名单工具自动生成的三个管理指令也必须逐项开启，不能绕过轻量模式。
+for _handler in CmdHandler.cmd_handlers:
+    for _action in ('on', 'off', 'status'):
+        if f'/sekai {_action}' in _handler.commands:
+            _handler.disabled = _handler.disabled or not is_sekai_command_enabled(f'misc.group_{_action}')
 
 
 # ======================= 通用常量 ======================= #
@@ -190,11 +208,42 @@ CARD_SKILL_NAMES = [
     ("judgment_up", "判", "判卡"),
 ]
 
-try:
-    UNKNOWN_IMG = Image.open(f"{SEKAI_ASSET_DIR}/static_images/unknown.png")
-except Exception as e:
-    logger.warning(f"加载 UNKNOWN_IMG 失败: {get_exc_desc(e)}")
-    UNKNOWN_IMG = None
+MISSING_RESOURCE_IMAGE = object()
+
+
+def create_missing_resource_image(resource_name: str) -> Image.Image:
+    """用随机渐变与资源名生成缺图提示，不依赖额外的静态图片。"""
+    from ..draw.bg import generate_organic_gradient_background
+
+    palette = Image.new('RGB', (3, 1))
+    palette.putdata([tuple(random.randint(60, 220) for _ in range(3)) for _ in range(3)])
+    img = generate_organic_gradient_background(palette, (256, 256), saturation=0.9).convert('RGBA')
+    overlay = Image.new('RGBA', img.size)
+    ImageDraw.Draw(overlay).rounded_rectangle((8, 8, 248, 248), radius=12, fill=(255, 255, 255, 100))
+    img = Image.alpha_composite(img, overlay)
+    draw = ImageDraw.Draw(img)
+    draw.text((128, 28), "资源缺失", font=get_font(DEFAULT_BOLD_FONT, 22), fill=(45, 45, 55), anchor='mt')
+    # 按像素宽度换行，保留完整资源名，避免长文件名越过边界。
+    for font_size in range(16, 5, -1):
+        font = get_font(DEFAULT_FONT, font_size)
+        lines, line = [], ''
+        for char in str(resource_name):
+            if char == '\n' or (line and draw.textlength(line + char, font=font) > 220):
+                lines.append(line)
+                line = ''
+            if char != '\n':
+                line += char
+        lines.append(line)
+        if len(lines) * (font_size + 4) <= 166:
+            break
+    draw.multiline_text((18, 70), '\n'.join(lines), font=font, fill=(45, 45, 55), spacing=4)
+    # 标记随 Pillow 的复制、缩放传递，避免把缺图当作真实缩略图持久缓存。
+    img.info['sekai_missing_resource'] = str(resource_name)
+    return img
+
+
+def is_missing_resource_image(img: Image.Image) -> bool:
+    return img is not None and 'sekai_missing_resource' in img.info
 
 
 MUSIC_TAG_UNIT_MAP = {
@@ -206,9 +255,6 @@ MUSIC_TAG_UNIT_MAP = {
     'vocaloid': 'piapro',
     'other': None,
 }
-
-STORYSUMMARY_WATERMARK = " [LunaBot_47生成-请勿转载] "
-
 
 # ======================= 通用功能 ======================= #
 

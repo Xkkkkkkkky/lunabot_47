@@ -250,7 +250,7 @@ async def compose_score_control_image(ctx: SekaiHandlerContext, target_point: in
         vs.add_item(title_grid, index=0)
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 查找自定义房间控分获取指定活动PT的所有可能(pt系数,加成)
 def get_custom_room_valid_scores(target_point: int, limit: int = None) -> List[tuple[int, int]]:
@@ -353,7 +353,7 @@ async def compose_custom_room_score_control_image(ctx: SekaiHandlerContext, targ
                         TextBox(f"{event_rate}", style2).set_size((None, gh)).set_content_align('c').set_padding((8, 0))
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
     
 
 # 合成歌曲meta图片
@@ -461,7 +461,7 @@ async def compose_music_meta_image(ctx: SekaiHandlerContext, mids: list[int]) ->
                                     TextBox(f" {multi_skill_account*100:.1f}%", style2)
                     
     add_watermark(canvas)       
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成歌曲排行图片
 async def compose_music_board_image(
@@ -697,7 +697,7 @@ async def compose_music_board_image(
                         TextBox(f"{row['tps']:.1f}", item_style).set_size((None, gh)).set_content_align('c').set_padding((16, 0))
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 
 # ==================== 指令处理 ==================== #
@@ -706,8 +706,8 @@ async def compose_music_board_image(
 pjsk_score_control = SekaiCmdHandler([
     "/pjsk score",
     "/控分",
-], regions=["jp"], prefix_args=['wl'])
-pjsk_score_control.check_cdrate(cd).check_wblist(gbl)
+], regions=["jp"], prefix_args=['wl'], command_key='ranking.pjsk_score_control')
+pjsk_score_control.check_cdrate(cd).check_wblist(gwl)
 @pjsk_score_control.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -738,8 +738,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_custom_room_score_control = SekaiCmdHandler([
     "/pjsk custom room score", "/custom room score",
     "/自定义房间控分", "/自定义房控分", "/自定义控分"
-], regions=["jp"])
-pjsk_custom_room_score_control.check_cdrate(cd).check_wblist(gbl)
+], regions=["jp"], command_key='ranking.pjsk_custom_room_score_control')
+pjsk_custom_room_score_control.check_cdrate(cd).check_wblist(gwl)
 @pjsk_custom_room_score_control.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -763,8 +763,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_music_meta = SekaiCmdHandler([
     "/pjsk music meta", "/music meta",
     "/歌曲meta", 
-], regions=["jp"], priority=1)
-pjsk_music_meta.check_cdrate(cd).check_wblist(gbl)
+], regions=["jp"], priority=1, command_key='music.pjsk_music_meta')
+pjsk_music_meta.check_cdrate(cd).check_wblist(gwl)
 @pjsk_music_meta.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -792,8 +792,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_music_board = SekaiCmdHandler([
     "/pjsk music board", "/music board",
     "/歌曲排行", "/歌曲比较", "/歌曲排名",
-], regions=["jp"], priority=1)
-pjsk_music_board.check_cdrate(cd).check_wblist(gbl)
+], regions=["jp"], priority=1, command_key='music.pjsk_music_board')
+pjsk_music_board.check_cdrate(cd).check_wblist(gwl)
 @pjsk_music_board.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip().lower()
@@ -974,4 +974,3 @@ async def _(ctx: SekaiHandlerContext):
             low_quality=True,
         )
     )
-

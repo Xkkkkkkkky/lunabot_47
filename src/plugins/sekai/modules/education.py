@@ -132,7 +132,7 @@ async def compose_challenge_live_detail_image(ctx: SekaiHandlerContext, qid: int
                         TextBox(fragment, text_style).set_w(w6).set_content_align('c')
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 获取玩家加成信息
 async def get_user_power_bonus(ctx: SekaiHandlerContext, profile: dict) -> Dict[str, int]:
@@ -225,7 +225,8 @@ async def compose_power_bonus_detail_image(ctx: SekaiHandlerContext, qid: int) -
                 with Grid(col_count=3).set_content_align('l').set_item_align('l').set_sep(20, 4).set_padding(16):
                     for unit in UNITS:
                         with HSplit().set_content_align('l').set_item_align('l').set_sep(4):
-                            ImageBox(get_unit_icon(unit), size=(None, 40))
+                            # 保留团体信息，直接绘制简称。
+                            TextBox(UNIT_ABBRS[unit].upper(), header_style).set_h(40).set_content_align('c')
                             TextBox(f"{unit_bonus[unit]['total']:.1f}%", header_style).set_w(100).set_content_align('r').set_overflow('clip')
                             detail = f"区域道具{unit_bonus[unit]['area_item']:.1f}%"
                             TextBox(detail, text_style)
@@ -240,7 +241,7 @@ async def compose_power_bonus_detail_image(ctx: SekaiHandlerContext, qid: int) -
                             # TextBox(detail, text_style)
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成区域道具升级材料图片
 async def compose_area_item_upgrade_materials_image(ctx: SekaiHandlerContext, qid: int, filter: AreaItemFilter) -> Image.Image:
@@ -280,6 +281,8 @@ async def compose_area_item_upgrade_materials_image(ctx: SekaiHandlerContext, qi
     item_ids: set[int] = set()
     area_item_icons: dict[int, Image.Image] = {}
     area_item_target_icons: dict[int, Image.Image] = {}
+    # 团体目标使用文字；角色与属性目标仍使用已有图标。
+    area_item_target_units: dict[int, str] = {}
     area_item_level_bonuses: dict[int, dict[int, float]] = {}
     area_item_max_levels: dict[int, int] = {}
     for item in await ctx.md.area_items.get():
@@ -292,9 +295,9 @@ async def compose_area_item_upgrade_materials_image(ctx: SekaiHandlerContext, qi
             area_item_level_bonuses.setdefault(item_id, {})[item_lv['level']] = item_lv['power1BonusRate']
             area_item_max_levels[item_id] = max(area_item_max_levels.get(item_id, 0), item_lv['level'])
 
-            if item_id not in area_item_target_icons:
+            if item_id not in area_item_target_icons and item_id not in area_item_target_units:
                 if item_lv.get('targetUnit', 'any') != 'any':
-                    area_item_target_icons[item_id] = get_unit_icon(item_lv['targetUnit'])
+                    area_item_target_units[item_id] = item_lv['targetUnit']
                     if item_lv['targetUnit'] == 'piapro':
                         if filter_piapro:
                             item_ids.add(item_id)
@@ -395,8 +398,11 @@ async def compose_area_item_upgrade_materials_image(ctx: SekaiHandlerContext, qi
                     with VSplit().set_content_align('l').set_item_align('l').set_sep(8).set_item_bg(roundrect_bg()).set_padding(8):
                         # 列头
                         with HSplit().set_content_align('c').set_item_align('c').set_omit_parent_bg(True):
-                            ImageBox(area_item_target_icons.get(item_id, UNKNOWN_IMG), size=(None, 64))
-                            ImageBox(area_item_icons.get(item_id, UNKNOWN_IMG), size=(128, 64), image_size_mode='fit') \
+                            if item_id in area_item_target_units:
+                                TextBox(UNIT_ABBRS[area_item_target_units[item_id]].upper(), TextStyle(font=DEFAULT_BOLD_FONT, size=24, color=gray_color)).set_h(64).set_content_align('c')
+                            else:
+                                ImageBox(area_item_target_icons.get(item_id) or create_missing_resource_image(f"area_item_target/{item_id}"), size=(None, 64))
+                            ImageBox(area_item_icons.get(item_id) or create_missing_resource_image(f"area_item/{item_id}"), size=(128, 64), image_size_mode='fit') \
                                 .set_content_align('c')
                             if current_lv:
                                 TextBox(f"Lv.{current_lv}", TextStyle(font=DEFAULT_BOLD_FONT, size=24, color=gray_color))
@@ -446,7 +452,7 @@ async def compose_area_item_upgrade_materials_image(ctx: SekaiHandlerContext, qi
     cache_key = None
     if profile is None:
         cache_key = f"{ctx.region}_area_item_{filter.unit}_{filter.cid}_{filter.attr}_{filter.flower}_{filter.tree}"
-    return await canvas.get_img(scale=0.75, cache_key=cache_key)
+    return await render_sekai_canvas(canvas, scale=0.75, cache_key=cache_key)
 
 # 合成羁绊等级图片
 async def compose_bonds_image(ctx: SekaiHandlerContext, qid: int, cid: int | None) -> Image.Image:
@@ -590,7 +596,7 @@ async def compose_bonds_image(ctx: SekaiHandlerContext, qid: int, cid: int | Non
                         TextBox(need_exp_text, text_style).set_w(w5).set_content_align('c')
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成队长次数图片
 async def compose_leader_count_image(ctx: SekaiHandlerContext, qid: int) -> Image.Image:
@@ -701,7 +707,7 @@ async def compose_leader_count_image(ctx: SekaiHandlerContext, qid: int) -> Imag
                                 Spacer(w=total_w, h=total_h).set_bg(colored_surface_background((100, 100, 100, 100), total_h//2))
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 
 
@@ -711,8 +717,8 @@ async def compose_leader_count_image(ctx: SekaiHandlerContext, qid: int) -> Imag
 pjsk_challenge_info = SekaiCmdHandler([
     "/pjsk challenge info", "/pjsk_challenge_info",
     "/挑战信息", "/挑战详情", "/挑战进度", "/挑战一览", "/每日挑战", 
-])
-pjsk_challenge_info.check_cdrate(cd).check_wblist(gbl)
+], command_key='education.pjsk_challenge_info')
+pjsk_challenge_info.check_cdrate(cd).check_wblist(gwl)
 @pjsk_challenge_info.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(
@@ -725,8 +731,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_power_bonus_info = SekaiCmdHandler([
     "/pjsk power bonus info", "/pjsk_power_bonus_info",
     "/加成信息", "/加成详情", "/加成进度", "/加成一览", "/角色加成",
-])
-pjsk_power_bonus_info.check_cdrate(cd).check_wblist(gbl)
+], command_key='education.pjsk_power_bonus_info')
+pjsk_power_bonus_info.check_cdrate(cd).check_wblist(gwl)
 @pjsk_power_bonus_info.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(
@@ -739,8 +745,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_area_item = SekaiCmdHandler([
     "/pjsk area item", "/area item",
     "/区域道具", "/区域道具升级", "/区域道具升级材料",
-])
-pjsk_area_item.check_cdrate(cd).check_wblist(gbl)
+], command_key='education.pjsk_area_item')
+pjsk_area_item.check_cdrate(cd).check_wblist(gwl)
 @pjsk_area_item.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -797,8 +803,8 @@ pjsk_bonds = SekaiCmdHandler([
     "/pjsk bonds", "/pjsk bond",
     "/羁绊", "/羁绊等级", "/角色羁绊", "/羁绊信息", 
     "/牵绊等级", "/牵绊", "/角色牵绊", "/牵绊信息",
-])
-pjsk_bonds.check_cdrate(cd).check_wblist(gbl)
+], command_key='education.pjsk_bonds')
+pjsk_bonds.check_cdrate(cd).check_wblist(gwl)
 @pjsk_bonds.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -819,8 +825,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_leader_count = SekaiCmdHandler([
     "/pjsk leader count",
     "/队长次数", "/角色次数", "/队长游玩次数", "/角色游玩次数",
-])
-pjsk_leader_count.check_cdrate(cd).check_wblist(gbl)
+], command_key='education.pjsk_leader_count')
+pjsk_leader_count.check_cdrate(cd).check_wblist(gwl)
 @pjsk_leader_count.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(

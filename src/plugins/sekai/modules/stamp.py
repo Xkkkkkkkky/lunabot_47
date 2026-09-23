@@ -85,7 +85,7 @@ async def compose_character_all_stamp_image(ctx: SekaiHandlerContext, cid: int, 
                                     Spacer(w=100, h=100)
                         TextBox(str(sid), style=TextStyle(font=DEFAULT_BOLD_FONT, size=24, color=text_color))
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 制作表情并返回cq码
 async def make_stamp_image_cq(ctx: SekaiHandlerContext, sid: int, text: str, format: str) -> str:
@@ -157,6 +157,9 @@ async def ensure_stamp_maker_base_image(ctx: SekaiHandlerContext, sid: int, use_
     assert_and_reply(c1 or c2, f"表情 {sid} 不支持抠图")
 
     img = await get_stamp_image(ctx, sid)
+    # 原图缺失时直接展示资源提示，不能把占位图交给 AI 抠图并存为底图。
+    if is_missing_resource_image(img):
+        raise ReplyException(f"表情{sid}原图缺失，暂无法制作底图\n{await get_image_cq(img)}")
     w, h = img.size
     black = Image.new("RGBA", (w, h), (0, 0, 0, 255))
     black.alpha_composite(img)
@@ -215,8 +218,8 @@ async def ensure_stamp_maker_base_image(ctx: SekaiHandlerContext, sid: int, use_
 pjsk_stamp = SekaiCmdHandler([
     "/pjsk stamp", "/pjsk bq", 
     "/pjsk表情",  "/pjsk表情制作",
-])
-pjsk_stamp.check_cdrate(cd).check_wblist(gbl)
+], command_key='stamp.pjsk_stamp')
+pjsk_stamp.check_cdrate(cd).check_wblist(gwl)
 @pjsk_stamp.handle()
 async def _(ctx: SekaiHandlerContext):
     await ctx.block_region()
@@ -299,8 +302,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_rand_stamp = SekaiCmdHandler([
     "/pjsk rand stamp", "/pjsk rand bq",
     "/pjsk随机表情", "/pjsk随机表情制作", "/随机表情",
-])
-pjsk_rand_stamp.check_cdrate(cd).check_wblist(gbl)
+], command_key='stamp.pjsk_rand_stamp')
+pjsk_rand_stamp.check_cdrate(cd).check_wblist(gwl)
 @pjsk_rand_stamp.handle()
 async def _(ctx: SekaiHandlerContext):
     await ctx.block_region()
@@ -345,8 +348,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_stamp_refresh = SekaiCmdHandler([
     "/pjsk stamp refresh", "/pjsk refresh stamp", 
     "/pjsk表情刷新", "/pjsk刷新表情", "/pjsk刷新表情底图", "/pjsk表情刷新底图",
-])
-pjsk_stamp_refresh.check_cdrate(cd).check_wblist(gbl)
+], command_key='stamp.pjsk_stamp_refresh')
+pjsk_stamp_refresh.check_cdrate(cd).check_wblist(gwl)
 @pjsk_stamp_refresh.handle()
 async def _(ctx: SekaiHandlerContext):
     await ctx.block_region()
@@ -375,8 +378,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_stamp_refresh_batch = SekaiCmdHandler([
     "/pjsk stamp refresh batch",
     "/pjsk表情刷新批量",
-])
-pjsk_stamp_refresh_batch.check_cdrate(cd).check_wblist(gbl).check_superuser()
+], command_key='stamp.pjsk_stamp_refresh_batch')
+pjsk_stamp_refresh_batch.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @pjsk_stamp_refresh_batch.handle()
 async def _(ctx: SekaiHandlerContext):
     await ctx.block_region()
@@ -407,8 +410,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_stamp_base = SekaiCmdHandler([
     "/pjsk stamp base",
     "/pjsk表情底图",
-])
-pjsk_stamp_base.check_cdrate(cd).check_wblist(gbl)
+], command_key='stamp.pjsk_stamp_base')
+pjsk_stamp_base.check_cdrate(cd).check_wblist(gwl)
 @pjsk_stamp_base.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -441,8 +444,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_stamp_base_delete = SekaiCmdHandler([
     "/pjsk remove stamp base", "/pjsk del stamp base",
     "/pjsk删除表情底图",
-])
-pjsk_stamp_base_delete.check_cdrate(cd).check_wblist(gbl).check_superuser()
+], command_key='stamp.pjsk_stamp_base_delete')
+pjsk_stamp_base_delete.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @pjsk_stamp_base_delete.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()

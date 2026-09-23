@@ -3,27 +3,40 @@
 Project Sekai（世界计划）游戏多区服服务
 
 榜线、组卡及控分功能由管理员启用；组卡关闭时，控分模块的指令也不可用。
+<!-- sekai-light: misc.group_on misc.group_off misc.group_status -->Sekai 在群聊中默认关闭，超级管理员可用 <!-- sekai-light: misc.group_on -->`/sekai on`<!-- /sekai-light --><!-- sekai-light: misc.group_on -->、<!-- /sekai-light --><!-- sekai-light: misc.group_off -->`/sekai off`<!-- /sekai-light --><!-- sekai-light: misc.group_on misc.group_off --> 和 <!-- /sekai-light --><!-- sekai-light: misc.group_status -->`/sekai status`<!-- /sekai-light --> 管理当前群。<!-- /sekai-light -->
+
+管理员可在 `config/sekai/sekai.yaml` 中设置 `sekai-light: true`，启用按需响应模式。
+`light_commands` 按本帮助的功能分类列出逐指令开关，默认全部为 `false`；只有手动改为 `true` 的指令才会响应。
+例如启用“卡牌”下的查卡功能，设置 `light_commands.card.pjsk_card: true`。
+同一指令的别名、区服前缀及 WL 前缀共用一个开关，关闭时包括指令的 `help` 参数在内均静默不响应。
+群管理指令也需要单独开启 `misc` 下的 `group_on`、`group_off`、`group_status`。
+这些开关修改后需重启；`sekai-light: false` 保持原有响应范围，总开关、榜线/组卡开关、区服和权限限制始终生效。
+轻量模式只控制指令响应，不关闭后台数据更新和已订阅的通知；轻量模式帮助仅显示 light_commands 中开启的项目；普通模式保留完整帮助。
 
 **使用指令时加上 `help` 参数可以快速查询对应指令的帮助**
 
+<!-- sekai-light: account.pjsk_bind -->
 #### 🔰 初次使用 & 账号管理
 
 - 发送 `/绑定 你的游戏ID` 绑定你的游戏账号，发送 `/绑定` 可以查询绑定的情况
 - 多次使用 `/绑定` 指令来绑定多个账号，最后一个绑定的账号会被设置为主账号
-- 查询指令的时候默认使用主账号，如果要使用别的账号需要加上 `ux`，例如查询第二个账号的个人信息： `/个人信息 u2`
+<!-- sekai-light: profile.pjsk_info -->- 查询指令的时候默认使用主账号，如果要使用别的账号需要加上 `ux`，例如查询第二个账号的个人信息： `/个人信息 u2`<!-- /sekai-light -->
 - 详情见下文 `账号设置` 部分
 
+<!-- /sekai-light -->
 #### 🌍 多服务器指令
 
 - 支持多服务器的指令，可以在**指令的斜杠后加上服务器缩写**来指定服务器
-- 例如: 原指令为 `/查卡` 国服版本则为 `/cn查卡` 
+<!-- sekai-light: card.pjsk_card -->- 例如: 原指令为 `/查卡` 国服版本则为 `/cn查卡` <!-- /sekai-light -->
 - 服务器对应缩写: `jp`日服 `cn`国服 `en`国际服 `tw`台服 `kr`韩服
 - 不加指令时，如果有设置过**默认区服**，则会使用设置的默认区服进行查询（详见下文`设置默认区服`），否则使用指令的默认区服
 
+<!-- sekai-light: account.upload_help -->
 #### 📡 抓包
 - 有一部分查询（玩家详细数据）需要**上传抓包数据**
 - 发送 `/抓包` 可以获取抓包教程
 
+<!-- /sekai-light -->
 #### 📊 数据来源 & 鸣谢
 - MasterData: **[Sekai Viewer](https://sekai.best/)** & **[Haruki Master DB](https://haruki.seiunx.com/)** & **[8823](https://github.com/kotori8823)**
 - 游戏资源: **[Sekai Viewer](https://sekai.best/)** & **[Haruki Assets](https://haruki.seiunx.com/)** & **[pjsekai.moe](pjsekai.moe)** & **[Unipjsk](https://github.com/watagashi-uni)**
@@ -39,122 +52,148 @@ Project Sekai（世界计划）游戏多区服服务
 
 标记 🛠️ 的指令仅限超级管理使用
 
+<!-- sekai-light: account.pjsk_bind account.pjsk_unbind account.pjsk_set_main account.pjsk_swap_bind account.pjsk_hide_id account.pjsk_show_id account.default_region account.upload_help account.pjsk_check_data account.pjsk_data_mode account.pjsk_hide_suite account.pjsk_show_suite account.verify_game_account account.get_verified_uids -->
 #### ⚙️ 账号设置
 
-- [绑定账号](#绑定账号)
-- [解绑账号](#解绑账号)
-- [设置主账号](#设置主账号)
-- [交换账号顺序](#交换账号顺序)
-- [隐藏/展示ID](#隐藏/展示ID)
-- [设置默认区服](#设置默认区服)
-- [获取抓包上传帮助](#获取抓包上传帮助)
-- [查询抓包数据状态](#查询抓包数据状态)
-- [修改抓包获取模式](#修改抓包获取模式)
-- [隐藏/展示抓包数据](#隐藏/展示抓包数据)
-- [验证游戏帐号](#验证游戏帐号)
-- [查询已验证的游戏帐号](#查询已验证的游戏帐号)
+<!-- sekai-light: account.pjsk_bind -->- [绑定账号](#绑定账号)<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_unbind -->- [解绑账号](#解绑账号)<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_set_main -->- [设置主账号](#设置主账号)<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_swap_bind -->- [交换账号顺序](#交换账号顺序)<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_hide_id account.pjsk_show_id -->- [隐藏/展示ID](#隐藏/展示ID)<!-- /sekai-light -->
+<!-- sekai-light: account.default_region -->- [设置默认区服](#设置默认区服)<!-- /sekai-light -->
+<!-- sekai-light: account.upload_help -->- [获取抓包上传帮助](#获取抓包上传帮助)<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_check_data -->- [查询抓包数据状态](#查询抓包数据状态)<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_data_mode -->- [修改抓包获取模式](#修改抓包获取模式)<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_hide_suite account.pjsk_show_suite -->- [隐藏/展示抓包数据](#隐藏/展示抓包数据)<!-- /sekai-light -->
+<!-- sekai-light: account.verify_game_account -->- [验证游戏帐号](#验证游戏帐号)<!-- /sekai-light -->
+<!-- sekai-light: account.get_verified_uids -->- [查询已验证的游戏帐号](#查询已验证的游戏帐号)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: profile.pjsk_info profile.pjsk_reg_time profile.upload_profile_bg profile.clear_profile_bg profile.adjust_profile_bg -->
 #### 👤 个人信息
 
-- [查询个人信息](#查询个人信息)
-- [查询注册时间](#查询注册时间)
-- [上传个人信息背景](#上传个人信息背景)
-- [清空个人信息背景](#清空个人信息背景)
-- [调整个人信息背景](#调整个人信息背景)
+<!-- sekai-light: profile.pjsk_info -->- [查询个人信息](#查询个人信息)<!-- /sekai-light -->
+<!-- sekai-light: profile.pjsk_reg_time -->- [查询注册时间](#查询注册时间)<!-- /sekai-light -->
+<!-- sekai-light: profile.upload_profile_bg -->- [上传个人信息背景](#上传个人信息背景)<!-- /sekai-light -->
+<!-- sekai-light: profile.clear_profile_bg -->- [清空个人信息背景](#清空个人信息背景)<!-- /sekai-light -->
+<!-- sekai-light: profile.adjust_profile_bg -->- [调整个人信息背景](#调整个人信息背景)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_challenge_info education.pjsk_power_bonus_info education.pjsk_area_item education.pjsk_bonds education.pjsk_leader_count -->
 #### 🌱 养成
 
-- [查询挑战Live信息](#查询挑战Live信息)
-- [查询加成信息](#查询加成信息)
-- [查询区域道具](#查询区域道具)
-- [查询角色牵绊等级](#查询角色牵绊等级)
-- [查询队长游玩次数](#查询队长游玩次数)
+<!-- sekai-light: education.pjsk_challenge_info -->- [查询挑战Live信息](#查询挑战Live信息)<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_power_bonus_info -->- [查询加成信息](#查询加成信息)<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_area_item -->- [查询区域道具](#查询区域道具)<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_bonds -->- [查询角色牵绊等级](#查询角色牵绊等级)<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_leader_count -->- [查询队长游玩次数](#查询队长游玩次数)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: vlive.pjsk_live -->
 #### 🎤 虚拟Live
 
-- [查询虚拟Live列表](#查询虚拟Live列表)
+<!-- sekai-light: vlive.pjsk_live -->- [查询虚拟Live列表](#查询虚拟Live列表)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: event.pjsk_event event.pjsk_event_story event.pjsk_event_record -->
 #### 🎈 活动
 
-- [查询活动](#查询活动)
-- [查询AI总结活动剧情](#查询AI总结活动剧情)
-- [活动记录](#活动记录)
+<!-- sekai-light: event.pjsk_event -->- [查询活动](#查询活动)<!-- /sekai-light -->
+<!-- sekai-light: event.pjsk_event_story -->- [查询AI总结活动剧情](#查询AI总结活动剧情)<!-- /sekai-light -->
+<!-- sekai-light: event.pjsk_event_record -->- [活动记录](#活动记录)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_song music.pjsk_music_cover music.pjsk_music_list music.pjsk_alias music.pjsk_alias_set music.pjsk_alias_del music.pjsk_chart music.pjsk_bpm music.pjsk_note_num music.pjsk_play_progress music.pjsk_music_rewards music.pjsk_music_meta music.pjsk_music_board music.pjsk_best30 music.pjsk_sync_music_alias -->
 #### 🎵 歌曲谱面
 
-- [查询歌曲](#查询歌曲)
-- [查询曲绘](#查询曲绘)
-- [查询歌曲列表](#查询歌曲列表)
-- [查询歌曲别名](#查询歌曲别名)
-- [添加歌曲别名](#添加歌曲别名)
-- [删除歌曲别名](#删除歌曲别名)
-- [查询谱面](#查询谱面)
-- [查询BPM](#查询BPM)
-- [查询指定物量歌曲](#查询指定物量歌曲)
-- [查询FC/AP进度](#查询FC/AP进度)
-- [查询打歌奖励](#查询打歌奖励)
-- [查询歌曲meta](#查询歌曲meta)
-- [查询歌曲排行](#查询歌曲排行)
-- [查询best30](#查询best30)
-- 🛠️ [同步歌曲别名](#同步歌曲别名)
+<!-- sekai-light: music.pjsk_song -->- [查询歌曲](#查询歌曲)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_cover -->- [查询曲绘](#查询曲绘)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_list -->- [查询歌曲列表](#查询歌曲列表)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_alias -->- [查询歌曲别名](#查询歌曲别名)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_alias_set -->- [添加歌曲别名](#添加歌曲别名)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_alias_del -->- [删除歌曲别名](#删除歌曲别名)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_chart -->- [查询谱面](#查询谱面)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_bpm -->- [查询BPM](#查询BPM)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_note_num -->- [查询指定物量歌曲](#查询指定物量歌曲)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_play_progress -->- [查询FC/AP进度](#查询FC/AP进度)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_rewards -->- [查询打歌奖励](#查询打歌奖励)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_meta -->- [查询歌曲meta](#查询歌曲meta)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_board -->- [查询歌曲排行](#查询歌曲排行)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_best30 -->- [查询best30](#查询best30)<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_sync_music_alias -->- 🛠️ [同步歌曲别名](#同步歌曲别名)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_card card.pjsk_card_img card.pjsk_box card.pjsk_card_story card.pjsk_chara_alias card.pjsk_gacha card.pjsk_gacha_record -->
 #### 🎴 卡牌
 
-- [查询卡牌](#查询卡牌)
-- [查询卡面](#查询卡面)
-- [保有卡牌一览](#保有卡牌一览)
-- [查询AI总结卡牌剧情](#查询AI总结卡牌剧情)
-- [查询角色别名](#查询角色别名)
-- [查询卡池](#查询卡池)
-- [查询抽卡记录](#查询抽卡记录)
+<!-- sekai-light: card.pjsk_card -->- [查询卡牌](#查询卡牌)<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_card_img -->- [查询卡面](#查询卡面)<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_box -->- [保有卡牌一览](#保有卡牌一览)<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_card_story -->- [查询AI总结卡牌剧情](#查询AI总结卡牌剧情)<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_chara_alias -->- [查询角色别名](#查询角色别名)<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_gacha -->- [查询卡池](#查询卡池)<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_gacha_record -->- [查询抽卡记录](#查询抽卡记录)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_event_deck deck.pjsk_challenge_deck deck.pjsk_no_event_deck deck.pjsk_bonus_deck deck.mysekai_deck deck.pjsk_score_up -->
 #### 🧮 组卡
-- [组卡](#组卡)
-- [实效计算](#实效计算)
+<!-- sekai-light: deck.pjsk_event_deck deck.pjsk_challenge_deck deck.pjsk_no_event_deck deck.pjsk_bonus_deck deck.mysekai_deck -->- [组卡](#组卡)<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_score_up -->- [实效计算](#实效计算)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_sk ranking.pjsk_skl ranking.pjsk_sks ranking.pjsk_skds ranking.pjsk_cf ranking.pjsk_csb ranking.pjsk_ptr ranking.pjsk_rtr ranking.pjsk_skp ranking.pjsk_winrate ranking.pjsk_score_control ranking.pjsk_custom_room_score_control -->
 #### 🎯 榜线分数
-- [榜线查询](#榜线查询)
-- [时速查询](#时速查询)
-- [日速查询](#日速查询)
-- [榜线查房](#榜线查房)
-- [周回数与停车时间查询](#周回数与停车时间查询)
-- [玩家榜线追踪](#玩家榜线追踪)
-- [排名榜线追踪](#排名榜线追踪)
-- [榜线预测](#榜线预测)
-- [5v5胜率预测](#5v5胜率预测)
-- [控分计算](#控分计算)
+<!-- sekai-light: ranking.pjsk_sk ranking.pjsk_skl -->- [榜线查询](#榜线查询)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_sks -->- [时速查询](#时速查询)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_skds -->- [日速查询](#日速查询)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_cf -->- [榜线查房](#榜线查房)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_csb -->- [周回数与停车时间查询](#周回数与停车时间查询)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_ptr -->- [玩家榜线追踪](#玩家榜线追踪)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_rtr -->- [排名榜线追踪](#排名榜线追踪)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_skp -->- [榜线预测](#榜线预测)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_winrate -->- [5v5胜率预测](#5v5胜率预测)<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_score_control ranking.pjsk_custom_room_score_control -->- [控分计算](#控分计算)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp stamp.pjsk_rand_stamp stamp.pjsk_stamp_base stamp.pjsk_stamp_refresh stamp.pjsk_stamp_refresh_batch stamp.pjsk_stamp_base_delete -->
 #### 💬 表情
 
-- [获取或制作表情](#获取或制作表情)
-- [获取或制作随机表情](#获取或制作随机表情)
-- [查看表情底图](#查看表情底图)
-- [刷新表情底图](#刷新表情底图)
-- 🛠️ [批量刷新表情底图](#批量刷新表情底图)
-- 🛠️ [删除表情底图](#删除表情底图)
+<!-- sekai-light: stamp.pjsk_stamp -->- [获取或制作表情](#获取或制作表情)<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_rand_stamp -->- [获取或制作随机表情](#获取或制作随机表情)<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp_base -->- [查看表情底图](#查看表情底图)<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp_refresh -->- [刷新表情底图](#刷新表情底图)<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp_refresh_batch -->- 🛠️ [批量刷新表情底图](#批量刷新表情底图)<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp_base_delete -->- 🛠️ [删除表情底图](#删除表情底图)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_guess_cover entertainment.pjsk_guess_chart entertainment.pjsk_guess_card entertainment.pjsk_guess_music entertainment.pjsk_spin_gacha entertainment.pjsk_entertainment_limit_check entertainment.pjsk_entertainment_limit -->
 #### 🎪 娱乐
 
-- [猜曲绘](#猜曲绘)
-- [猜谱面](#猜谱面)
-- [猜卡面](#猜卡面)
-- [模拟抽卡](#模拟抽卡)
-- [查看娱乐功能使用情况](#查看娱乐功能使用情况)
-- 🛠️ [设置娱乐功能使用上限](#设置娱乐功能使用上限)
+<!-- sekai-light: entertainment.pjsk_guess_cover -->- [猜曲绘](#猜曲绘)<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_guess_chart -->- [猜谱面](#猜谱面)<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_guess_card -->- [猜卡面](#猜卡面)<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_spin_gacha -->- [模拟抽卡](#模拟抽卡)<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_entertainment_limit_check -->- [查看娱乐功能使用情况](#查看娱乐功能使用情况)<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_entertainment_limit -->- 🛠️ [设置娱乐功能使用上限](#设置娱乐功能使用上限)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
+<!-- sekai-light: misc.chara_bd misc.pjsk_update misc.ngword misc.sekai_group_sub misc.sekai_group_unsub misc.pjsk_user_sta misc.pjsk_bind_history -->
 #### 其他
 
-- [查询角色生日](#查询角色生日)
-- [刷新MasterData数据](#刷新MasterData数据)
-- [查询文本中的屏蔽词](#查询文本中的屏蔽词)
-- 🛠️ [开启/关闭群聊功能](#开启/关闭群聊功能)
-- 🛠️ [查询用户统计](#查询用户统计)
-- 🛠️ [查询绑定历史](#查询绑定历史)
+<!-- sekai-light: misc.chara_bd -->- [查询角色生日](#查询角色生日)<!-- /sekai-light -->
+<!-- sekai-light: misc.pjsk_update -->- [刷新MasterData数据](#刷新MasterData数据)<!-- /sekai-light -->
+<!-- sekai-light: misc.ngword -->- [查询文本中的屏蔽词](#查询文本中的屏蔽词)<!-- /sekai-light -->
+<!-- sekai-light: misc.sekai_group_sub misc.sekai_group_unsub -->- 🛠️ [开启/关闭群聊功能](#开启/关闭群聊功能)<!-- /sekai-light -->
+<!-- sekai-light: misc.pjsk_user_sta -->- 🛠️ [查询用户统计](#查询用户统计)<!-- /sekai-light -->
+<!-- sekai-light: misc.pjsk_bind_history -->- 🛠️ [查询绑定历史](#查询绑定历史)<!-- /sekai-light -->
 
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: account.pjsk_bind account.pjsk_unbind account.pjsk_set_main account.pjsk_swap_bind account.pjsk_hide_id account.pjsk_show_id account.default_region account.upload_help account.pjsk_check_data account.pjsk_data_mode account.pjsk_hide_suite account.pjsk_show_suite account.verify_game_account account.get_verified_uids -->
 ## ⚙️ 账号设置
 
+<!-- sekai-light: account.pjsk_bind -->
 ### 绑定账号
 `/绑定` `/pjsk bind` `/pjsk id`
 > 绑定游戏ID   
@@ -166,6 +205,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/绑定 12345` 绑定ID为 12345 的游戏账号
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_unbind -->
 ### 解绑账号
 `/解绑` `/pjsk unbind`  
 > 解绑指定服务器绑定的指定序号账号  
@@ -174,6 +215,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/解绑 2` 解绑绑定的第二个账号
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_set_main -->
 ### 设置主账号
 `/主账号` `/设置主账号` `/pjsk set main`
 > 设置主账号为指定序号账号  
@@ -182,6 +225,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/主账号 2` 设置绑定的第二个账号为主账号
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_swap_bind -->
 ### 交换账号顺序
 `/交换绑定` `/交换账号` `/pjsk swap bind`
 > 交换绑定账号的顺序  
@@ -190,16 +235,24 @@ Project Sekai（世界计划）游戏多区服服务
 - `/交换绑定 1 2` 交换绑定的第1个和第2个账号顺序
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_hide_id account.pjsk_show_id -->
 ### 隐藏/展示ID
-`/pjsk隐藏id` `/pjsk展示id` `/pjsk hide id` `/pjsk show id`
+<!-- sekai-light: account.pjsk_hide_id -->`/pjsk隐藏id`<!-- /sekai-light --> <!-- sekai-light: account.pjsk_show_id -->`/pjsk展示id`<!-- /sekai-light --> <!-- sekai-light: account.pjsk_hide_id -->`/pjsk hide id`<!-- /sekai-light --> <!-- sekai-light: account.pjsk_show_id -->`/pjsk show id`<!-- /sekai-light -->
 > 隐藏后进行相关查询id会被隐藏，每个服务器需要分别设置   
 绑定游戏id后默认就是隐藏状态   
 支持服务器: `所有`  
 
+<!-- sekai-light: account.pjsk_hide_id -->
 - `/pjsk隐藏id`
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_show_id -->
 - `/pjsk展示id`
+<!-- /sekai-light -->
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.default_region -->
 ### 设置默认区服
 `/pjsk服务器` `/pjsk区服` `/pjsk default region`
 > 设置默认区服，不加参数可以查询当前设置的默认区服  
@@ -208,6 +261,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/pjsk服务器` 查询当前设置的默认区服
 - `/pjsk服务器 jp` 设置默认区服为日服
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.upload_help -->
 ### 获取抓包上传帮助
 `/抓包帮助` `/抓包` `/pjsk upload help`
 > 获取抓包上传帮助  
@@ -215,6 +270,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/抓包帮助`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_check_data -->
 ### 查询抓包数据状态
 `/抓包数据` `/抓包状态` `/pjsk check data`
 > 查询自己的抓包数据在自建抓包工具/Haruki工具箱中的更新时间  
@@ -223,6 +280,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/抓包数据`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_data_mode -->
 ### 修改抓包获取模式
 `/抓包模式` `/pjsk data mode`
 > 修改自己的抓包获取模式，可用的模式有:  
@@ -236,16 +295,24 @@ Project Sekai（世界计划）游戏多区服服务
 - `/抓包模式`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_hide_suite account.pjsk_show_suite -->
 ### 隐藏/展示抓包数据
-`/隐藏抓包` `/展示抓包` `/pjsk hide suite` `/pjsk show suite`
+<!-- sekai-light: account.pjsk_hide_suite -->`/隐藏抓包`<!-- /sekai-light --> <!-- sekai-light: account.pjsk_show_suite -->`/展示抓包`<!-- /sekai-light --> <!-- sekai-light: account.pjsk_hide_suite -->`/pjsk hide suite`<!-- /sekai-light --> <!-- sekai-light: account.pjsk_show_suite -->`/pjsk show suite`<!-- /sekai-light -->
 > 隐藏📡抓包数据时，进行抓包数据相关的查询时不会展示自己的数据  
 每个服务器需要分别设置  
 支持服务器: `所有`
 
+<!-- sekai-light: account.pjsk_hide_suite -->
 - `/隐藏抓包`
+<!-- /sekai-light -->
+<!-- sekai-light: account.pjsk_show_suite -->
 - `/展示抓包`
+<!-- /sekai-light -->
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.verify_game_account -->
 ### 验证游戏帐号
 `/pjsk验证` `/pjsk verify`
 > 验证游戏帐号  
@@ -254,6 +321,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/pjsk验证`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: account.get_verified_uids -->
 ### 查询已验证的游戏帐号
 `/pjsk verify list` `/pjsk验证列表`
 > 查询已验证的游戏帐号列表   
@@ -263,11 +332,15 @@ Project Sekai（世界计划）游戏多区服服务
 
 
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: profile.pjsk_info profile.pjsk_reg_time profile.upload_profile_bg profile.clear_profile_bg profile.adjust_profile_bg -->
 ## 👤 个人信息
 
 
+<!-- sekai-light: profile.pjsk_info -->
 ### 查询个人信息
 `/个人信息` `/名片` `/pjsk info`
 > 查询个人信息，附上ID可以查询ID对应的账号信息   
@@ -280,6 +353,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/个人信息 横屏` 临时指定横屏
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: profile.pjsk_reg_time -->
 ### 查询注册时间
 `/注册时间` `/pjsk reg time`
 > 查询自己的注册时间  
@@ -288,6 +363,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/注册时间`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: profile.upload_profile_bg -->
 ### 上传个人信息背景
 `/上传个人信息背景` `/pjsk upload profile bg`
 > 上传个人信息背景图片  
@@ -297,6 +374,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `(回复一张图片) /上传个人信息背景`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: profile.clear_profile_bg -->
 ### 清空个人信息背景
 `/清空个人信息背景` `/清除个人信息背景` `/pjsk clear profile bg`
 > 清空个人信息背景图片  
@@ -306,6 +385,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/清空个人信息背景`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: profile.adjust_profile_bg -->
 ### 调整个人信息背景
 `/调整个人信息` `/调整个人信息背景` `/pjsk adjust profile bg`
 > 调整个人信息界面方向、透明度和模糊度  
@@ -320,10 +401,14 @@ Project Sekai（世界计划）游戏多区服服务
 - `/调整个人信息背景 透明 50` 设置透明度为50
 - `/调整个人信息背景 模糊 5` 设置模糊度为5
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: education.pjsk_challenge_info education.pjsk_power_bonus_info education.pjsk_area_item education.pjsk_bonds education.pjsk_leader_count -->
 ## 🌱 养成
 
+<!-- sekai-light: education.pjsk_challenge_info -->
 ### 查询挑战Live信息
 `/挑战信息` `/挑战进度` `/挑战详情` `/pjsk challenge info`
 > 查询挑战Live的详细信息（等级、最高分、剩余奖励），需要📡抓包数据  
@@ -332,6 +417,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/挑战信息`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_power_bonus_info -->
 ### 查询加成信息
 `/加成信息` `/加成详情` `/pjsk power bonus info`
 > 查询综合力加成信息（角色加成、组合加成、属性加成），需要📡抓包数据  
@@ -340,6 +427,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/加成信息`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_area_item -->
 ###  查询区域道具
 `/区域道具` `/pjsk area item`
 > 查询区域道具升级材料信息，可用参数: 团名/角色名/属性/树/花    
@@ -353,6 +442,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/区域道具 蓝 all` 查询蓝属性道具的全部等级
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_bonds -->
 ### 查询角色牵绊等级
 `/羁绊` `/牵绊` `/牵绊等级` `/羁绊等级` `/pjsk bonds`
 > 查询角色牵绊等级信息，需要📡抓包数据    
@@ -362,6 +453,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/羁绊 miku` 查询miku和其他角色的牵绊等级信息
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: education.pjsk_leader_count -->
 ### 查询队长游玩次数
 `/队长次数` `/角色次数` `/pjsk leader count`
 > 查询所有角色作为队长的游玩次数，需要📡抓包数据   
@@ -370,10 +463,14 @@ Project Sekai（世界计划）游戏多区服服务
 - `/队长次数`
 
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: vlive.pjsk_live -->
 ## 🎤 虚拟Live
 
+<!-- sekai-light: vlive.pjsk_live -->
 ### 查询虚拟Live列表
 `/虚拟live` `/pjsk live`
 > 查询最近的虚拟Live列表，包含Live观看奖励和参与角色  
@@ -382,8 +479,11 @@ Project Sekai（世界计划）游戏多区服服务
 
 - `/虚拟live`
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: event.pjsk_event event.pjsk_event_story event.pjsk_event_record -->
 ## 🎈 活动
 
 **🔍 如何查询活动**
@@ -405,6 +505,7 @@ Project Sekai（世界计划）游戏多区服服务
     - 以上参数可以混合使用，用空格分隔
  
 
+<!-- sekai-light: event.pjsk_event -->
 ### 查询活动
 `/活动` `/pjsk event` `/活动列表` `/pjsk events`
 > 查询单个活动或者多个活动   
@@ -422,6 +523,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/活动列表 mnr箱` mnr箱活列表
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: event.pjsk_event_story -->
 ### 查询AI总结活动剧情
 `/活动剧情` `/pjsk event story`
 > 查询AI总结活动剧情  
@@ -435,6 +538,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/活动剧情 123 refresh` 查询并刷新AI总结
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: event.pjsk_event_record -->
 ### 活动记录
 `/活动记录` `/冲榜记录` `/pjsk event record`
 > 查询自己排名/活动点数前几的冲榜记录，需要📡抓包数据  
@@ -443,8 +548,11 @@ Project Sekai（世界计划）游戏多区服服务
 
 - `/活动记录`
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: music.pjsk_song music.pjsk_music_cover music.pjsk_music_list music.pjsk_alias music.pjsk_alias_set music.pjsk_alias_del music.pjsk_chart music.pjsk_bpm music.pjsk_note_num music.pjsk_play_progress music.pjsk_music_rewards music.pjsk_music_meta music.pjsk_music_board music.pjsk_best30 music.pjsk_sync_music_alias -->
 ## 🎵 歌曲谱面
 
 **🔍 如何查询歌曲**
@@ -468,6 +576,7 @@ Project Sekai（世界计划）游戏多区服服务
     - 某个难度 闭区间等级范围 的歌曲: `expert 25 37`
 
 
+<!-- sekai-light: music.pjsk_song -->
 ### 查询歌曲
 `/查曲` `/pjsk music` `/pjsk song` `/song` `/music`
 > 查询指定一首歌曲的详情  
@@ -486,6 +595,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/查曲 123 456` 查询id为123和456的歌曲
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_cover -->
 ### 查询曲绘
 `/查曲绘` `/曲绘` `/pjsk music cover`
 > 查询指定一首歌曲的曲绘  
@@ -499,6 +610,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/查曲绘 虾`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_list -->
 ### 查询歌曲列表
 `/歌曲列表` `/pjsk music list` `/pjsk song list` `/难度排行` `/定数表`
 > 查询指定难度的全部歌曲列表，存在📡抓包数据时会展示每首歌是否Clear/FC/AP  
@@ -515,6 +628,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/歌曲列表 expert leak`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_alias -->
 ### 查询歌曲别名
 `/歌曲别名` `/pjsk alias`
 > 查询某个歌曲已添加的歌曲别名，只能用歌曲id查询  
@@ -524,6 +639,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/歌曲别名 123` 查询id为123的歌曲的别名
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_alias_set -->
 ### 添加歌曲别名
 `/添加歌曲别名` `/pjsk alias add`
 > 为某首歌曲添加别名，别名用中文或英文逗号分隔  
@@ -533,6 +650,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/添加别名 123 aaa,bbb` 为id为123的歌曲添加别名aaa和bbb
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_alias_del -->
 ### 删除歌曲别名
 🛠️ `/删除歌曲别名` `/pjsk alias del`
 > 删除别名，别名用中文或英文逗号分隔  
@@ -542,6 +661,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/删除别名 aaa,bbb` 删除别名aaa和bbb
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_chart -->
 ### 查询谱面
 `/谱面` `/谱面预览` `/pjsk chart` `/技能预览`
 
@@ -557,6 +678,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/谱面 id123 refresh` 查询并刷新id为123的歌曲的 MASTER 难度谱面
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_bpm -->
 ### 查询BPM
 `/pjskbpm` `/查bpm`
 > 查询指定歌曲的BPM信息  
@@ -567,6 +690,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/pjskbpm 虾` 查询别名为虾的歌曲的BPM信息
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_note_num -->
 ### 查询指定物量歌曲
 `/查物量` `/pjsk note num` `/pjsk note count`
 > 查询哪些歌曲的物量等于指定数量  
@@ -576,6 +701,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/查物量 1000` 查询物量为1000的歌曲
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_play_progress -->
 ### 查询FC/AP进度
 `/pjsk进度` `/pjsk progress`
 > 查询自己的CLEAR/FC/AP进度，需要📡抓包数据  
@@ -586,6 +713,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/pjsk进度 apd` 查询`APPEND`难度的进度
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_rewards -->
 ### 查询打歌奖励
 `/打歌奖励` `/歌曲奖励` `/pjsk music reward`
 > 查询剩余未获取的打歌奖励（评级、连击奖励）  
@@ -595,6 +724,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/打歌奖励`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_meta -->
 ### 查询歌曲meta
 `/歌曲meta` `/pjsk music meta` `/music meta`
 > 查询指定歌曲meta数据（即歌曲分数信息）   
@@ -606,6 +737,8 @@ Project Sekai（世界计划）游戏多区服服务
 - `/歌曲meta 虾 / 龙` 虾和龙的歌曲meta数据进行比较
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_music_board -->
 ### 查询歌曲排行
 `/歌曲排行` `/歌曲比较` `/歌曲排名` `/pjsk music board`
 > 查询歌曲按live分数的排行榜，可用参数:         
@@ -630,6 +763,8 @@ Live类型: `单人` `多人` `auto`
 - `/歌曲排行 虾` 指定关注某首歌曲全部难度
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_best30 -->
 ### 查询best30
 `/pjsk b30` `/b30` `/pjsk rating`
 > 查询 Best30 列表，需要 Suite 中的歌曲成绩数据。
@@ -647,6 +782,8 @@ Live类型: `单人` `多人` `auto`
 - `/b30 游戏UID` 使用简写指令
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: music.pjsk_sync_music_alias -->
 ### 同步歌曲别名
 🛠️ `/同步歌曲别名` `/sync music alias` `/sma`
 > 从haruki同步歌曲别名
@@ -654,8 +791,11 @@ Live类型: `单人` `多人` `auto`
 - `/sma`
 
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: card.pjsk_card card.pjsk_card_img card.pjsk_box card.pjsk_card_story card.pjsk_chara_alias card.pjsk_gacha card.pjsk_gacha_record -->
 ## 🎴 卡牌
 
 **🔍 如何查询卡牌**
@@ -678,6 +818,7 @@ Live类型: `单人` `多人` `auto`
     - 角色昵称+负数索引，表示角色的倒数第几张卡: `miku-1`
 
 
+<!-- sekai-light: card.pjsk_card -->
 ### 查询卡牌
 `/查卡` `/卡牌` `/card` `/pjsk card`
 > 可查多张或单张卡:  
@@ -694,6 +835,8 @@ Live类型: `单人` `多人` `auto`
 - `/查卡 miku-1` 查询miku的倒数第1张卡牌详情
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_card_img -->
 ### 查询卡面图片
 `/查卡面` `/卡面` `/pjsk card img`
 > 查询指定一张卡牌的卡面图片，同时给出花前花后，图片较大请耐心等待  
@@ -705,6 +848,8 @@ Live类型: `单人` `多人` `auto`
 - `/卡面 miku-1`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_box -->
 ### 保有卡牌一览
 `/卡牌一览` `/pjsk box`
 > 查询全部的卡牌一览，有📡抓包数据时，未获取的卡牌会显示为灰色  
@@ -718,6 +863,8 @@ Live类型: `单人` `多人` `auto`
 - `/卡牌一览 box`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_card_story -->
 ### 查询AI总结卡牌剧情
 `/卡牌剧情` `/卡面剧情` `/pjsk card story`
 > 查询AI总结卡牌剧情  
@@ -729,6 +876,8 @@ Live类型: `单人` `多人` `auto`
 - `/卡牌剧情 123 refresh` 查询并刷新AI总结
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_chara_alias -->
 ### 查询角色别名
 `/角色别名` `/pjsk chara alias`
 > 查询某个角色的角色别名，可以用角色名或昵称查询  
@@ -736,6 +885,8 @@ Live类型: `单人` `多人` `auto`
 - `/角色别名 miku`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_gacha -->
 ### 查询卡池
 `/卡池` `/卡池一览` `/卡池列表` `/pjsk gacha` 
 > 查询卡池一览或卡池详情  
@@ -762,6 +913,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/卡池 leak card123` 查询未来包含id为123的卡牌的卡池
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: card.pjsk_gacha_record -->
 # 查询抽卡记录
 `/抽卡记录` `/抽卡历史` `/pjsk gacha record`
 > 查询自己的抽卡记录，需要📡抓包数据   
@@ -773,23 +926,37 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/抽卡记录 123 456` 
 
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: deck.pjsk_event_deck deck.pjsk_challenge_deck deck.pjsk_no_event_deck deck.pjsk_bonus_deck deck.mysekai_deck deck.pjsk_score_up -->
 ## 🧮 组卡
 
 
+<!-- sekai-light: deck.pjsk_event_deck deck.pjsk_challenge_deck deck.pjsk_no_event_deck deck.pjsk_bonus_deck deck.mysekai_deck -->
 ### 组卡
-`/组卡` `/活动组卡` `/挑战组卡` `/最强组卡` `/加成组卡` `/烤森组卡`
+<!-- sekai-light: deck.pjsk_event_deck -->`/组卡`<!-- /sekai-light --> <!-- sekai-light: deck.pjsk_event_deck -->`/活动组卡`<!-- /sekai-light --> <!-- sekai-light: deck.pjsk_challenge_deck -->`/挑战组卡`<!-- /sekai-light --> <!-- sekai-light: deck.pjsk_no_event_deck -->`/最强组卡`<!-- /sekai-light --> <!-- sekai-light: deck.pjsk_bonus_deck -->`/加成组卡`<!-- /sekai-light --> <!-- sekai-light: deck.mysekai_deck -->`/烤森组卡`<!-- /sekai-light -->
 > 使用📡抓包数据计算各类最优组卡，详见下文  
 支持服务器: `所有`  
 
 **不同用途的组卡指令**
 
+<!-- sekai-light: deck.pjsk_event_deck -->
 - 活动相关 `/组卡` `/活动组卡`
+<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_challenge_deck -->
 - 每日挑战相关 `/挑战组卡`
+<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_no_event_deck -->
 - 活动无关 `/最强组卡`
+<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_bonus_deck -->
 - 凑加成用于控分 `/加成组卡` `/控分组卡`
+<!-- /sekai-light -->
+<!-- sekai-light: deck.mysekai_deck -->
 - 烤森获取活动PT `/烤森组卡` `/ms组卡`
+<!-- /sekai-light -->
 
 > 烤森组卡仅使用普通 Suite、活动和卡牌数据，不包含依赖 MySekai 专用文件的画布、门加成。
 
@@ -873,6 +1040,7 @@ mnr1箱对应的卡池: `eventmnr1`
             - **固定卡组：** 可以使用前文的 **查看你当前主队的分数** 或者 **指定强制包含卡牌**
         - 不限定歌曲时，会使用当前固定的卡组比较所有歌曲
         
+<!-- sekai-light: deck.pjsk_event_deck -->
 **活动组卡示例**
 
 - `/组卡` 当期活动组卡
@@ -882,65 +1050,100 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/组卡 160 auto #mnr` 160期活动auto组卡，队长角色强制为mnr
 - `/组卡 歌曲比较 当前` 使用当前主队比较所有歌曲的活动pt
 
+<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_challenge_deck -->
 **挑战组卡示例**
 
 - `/挑战组卡` 所有角色各组一队
 - `/挑战组卡 miku 群青apd` 指定角色和歌曲
 - `/挑战组卡 mnr 歌曲比较 10th 群青apd` 比较指定两首歌的mnr挑战分数
 
+<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_no_event_deck -->
 **最强组卡示例**
 
 - `/最强组卡` 和活动无关的分数最大组卡
 - `/最强组卡 综合` 综合力最大组卡
 - `/最强组卡 实效` 实效最大组卡(支援队)
 
+<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_bonus_deck -->
 **加成组卡示例**
 
 - `/加成组卡 100` 当期活动凑100加成
 - `/加成组卡 120 130` 凑120或130加成
 - `/加成组卡 event123 100` 指定活动
 
+<!-- /sekai-light -->
+<!-- sekai-light: deck.mysekai_deck -->
 **烤森组卡示例**
 
 - `/烤森组卡` 当期活动烤森组卡
 - `/烤森组卡 event123` 指定活动
 - `/烤森组卡 绿 mmj` 模拟绿mmj加成活动
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
+<!-- sekai-light: deck.pjsk_score_up -->
 ### 实效计算
 `/实效` `/pjsk score up` `/倍率`
 > 输入5个位置的技能加分，计算协力卡组实效  
 
 - `/实效 100 200 300 400 500`
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: ranking.pjsk_sk ranking.pjsk_skl ranking.pjsk_sks ranking.pjsk_skds ranking.pjsk_cf ranking.pjsk_csb ranking.pjsk_ptr ranking.pjsk_rtr ranking.pjsk_skp ranking.pjsk_winrate ranking.pjsk_score_control ranking.pjsk_custom_room_score_control -->
 ## 🎯 榜线分数
 
 **🔍 如何查询WorldLink活动单榜**
 
 - 本部分中指令默认查询**总榜**，若要查询当期WL**当前章节单榜**可以通过在指令前添加 `wl` 前缀来查询：
-    - 例如 `/sk线` -> `/wlsk线`  `/cnsk线` -> `/cnwlsk线`
+<!-- sekai-light: ranking.pjsk_skl -->    - 例如 `/sk线` -> `/wlsk线`  `/cnsk线` -> `/cnwlsk线`<!-- /sekai-light -->
 - 查询当期WL其他章节单榜，可添加角色昵称
-    - 例如 `/sk线` -> `/wlsk线 miku`  `/cnsk线` -> `/cnwlsk线 miku`
+<!-- sekai-light: ranking.pjsk_skl -->    - 例如 `/sk线` -> `/wlsk线 miku`  `/cnsk线` -> `/cnwlsk线 miku`<!-- /sekai-light -->
 - 暂不支持查询往期WL单榜
 
 
+<!-- sekai-light: ranking.pjsk_sk ranking.pjsk_skl -->
 ### 榜线查询
-`/sk` `/skl` `/sk线` `/榜线` 
+<!-- sekai-light: ranking.pjsk_sk -->`/sk`<!-- /sekai-light --> <!-- sekai-light: ranking.pjsk_skl -->`/skl`<!-- /sekai-light --> <!-- sekai-light: ranking.pjsk_skl -->`/sk线`<!-- /sekai-light --> <!-- sekai-light: ranking.pjsk_skl -->`/榜线` <!-- /sekai-light -->
 > 查询活动榜线  
+<!-- sekai-light: ranking.pjsk_sk -->
 `/sk` 用于查询单个/多个榜线，支持用玩家名、ID、排名查询  
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_skl -->
 `/skl` `/sk线` `/榜线` 用于查询当期全体榜线  
+<!-- /sekai-light -->
 支持服务器: `所有`  
 
+<!-- sekai-light: ranking.pjsk_sk -->
 - `/sk` 查询自己绑定账号的榜线
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_sk -->
 - `/sk 1k 1w` 查询T1000和T10000的榜线
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_sk -->
 - `/sk 1 2 3` 查询T1、T2、T3的榜线
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_sk -->
 - `/sk 1-20` 查询T1到T20的榜线
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_sk -->
 - `/sk @user` 查询@的用户的榜线
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_sk -->
 - `/sk 12345678` 查询ID为12345678的榜线
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_skl -->
 - `/skl` 查询当期全体榜线
+<!-- /sekai-light -->
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_sks -->
 ### 时速查询
 `/时速` `/sks`
 > 查询当前活动的时速  
@@ -951,6 +1154,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/sks 20` 最近20分钟换算时速
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_skds -->
 ### 日速查询
 `/日速` `/skds`
 > 查询当前活动的日速  
@@ -961,6 +1166,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/skds 2` 最近2天换算日速
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_cf -->
 ### 榜线查房
 `/cf` `/查房`
 > 查询某个或多个玩家近1小时的周回信息  
@@ -972,6 +1179,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/cf 12345678` 查询ID为12345678的玩家的周回信息
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_csb -->
 ### 周回数与停车时间查询
 `/停车时间` `/查水表` `/csb`
 > 查询某个玩家的各小时周回数热力图以及停车时间信息，仅支持100以内    
@@ -983,6 +1192,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/csb 12345678` 查询ID为12345678的玩家的停车时间信息
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_ptr -->
 ### 玩家榜线追踪
 `/ptr` `/玩家追踪`
 > 查询某个玩家当期活动分数和排名的变化趋势  
@@ -995,6 +1206,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/ptr 12345678` 查询ID为12345678的玩家的分数和排名变化趋势
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_rtr -->
 ### 排名榜线追踪
 `/rtr` `/skt` `/分数线追踪`
 > 查询当前活动的指定排名分数线的变化趋势，包含预测  
@@ -1003,15 +1216,21 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/skt 1k` 查询当前活动的T1000分数线的变化趋势
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_skp -->
 ### 榜线预测
 `/skp` `/sk预测`
 > 查询当期活动榜线预测   
+<!-- sekai-light: ranking.pjsk_rtr -->
 也可通过 `/rtr` 指令查询指定排名的预测和预测历史记录 
+<!-- /sekai-light -->
 支持服务器: `所有`
 
 - `/skp`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_winrate -->
 ### 5v5胜率预测
 `/胜率` `/胜率预测` `/5v5预测` `/pjsk winrate predict`
 > 查询5v5活动队伍的胜率预测以及募集状态  
@@ -1020,28 +1239,46 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/胜率`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_score_control ranking.pjsk_custom_room_score_control -->
 ### 控分计算
-`/控分` `/pjsk score` `/wl控分` `/wlpjsk score` `/自定义房间控分` `/custom room score`
+<!-- sekai-light: ranking.pjsk_score_control -->`/控分`<!-- /sekai-light --> <!-- sekai-light: ranking.pjsk_score_control -->`/pjsk score`<!-- /sekai-light --> <!-- sekai-light: ranking.pjsk_score_control -->`/wl控分`<!-- /sekai-light --> <!-- sekai-light: ranking.pjsk_score_control -->`/wlpjsk score`<!-- /sekai-light --> <!-- sekai-light: ranking.pjsk_custom_room_score_control -->`/自定义房间控分`<!-- /sekai-light --> <!-- sekai-light: ranking.pjsk_custom_room_score_control -->`/custom room score`<!-- /sekai-light -->
 > 分为普通控分和自定义房间控两类:   
+<!-- sekai-light: ranking.pjsk_score_control -->
 1.普通控分    
 查询单人Live下指定歌曲获取指定活动PT的方式    
 可以指定歌曲ID/歌曲名，默认歌曲为虾    
 加上`wl`前缀能够使用更高的活动加成上限     
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_custom_room_score_control -->
 2.自定义房间控分    
 用于差距小于100PT时进行补救的控分，具体方法参见图片中的说明     
-若上传过Suite抓包数据📡，可以通过`/加成组卡 活动加成`加速配队      
+<!-- sekai-light: deck.pjsk_bonus_deck -->若上传过Suite抓包数据📡，可以通过`/加成组卡 活动加成`加速配队      <!-- /sekai-light -->
+<!-- /sekai-light -->
 支持服务器: `jp`    
 
+<!-- sekai-light: ranking.pjsk_score_control -->
 - `/控分 100` 查询获取100pt的方式
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_score_control -->
 - `/控分 100 盘古` 查询歌曲为盘古的获取100pt的方式
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_score_control -->
 - `/wl控分 100` 使用WL加成上限查询获取100pt的方式
+<!-- /sekai-light -->
+<!-- sekai-light: ranking.pjsk_custom_room_score_control -->
 - `/自定义房间控分 50` 查询获取50pt的方式
+<!-- /sekai-light -->
 
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: stamp.pjsk_stamp stamp.pjsk_rand_stamp stamp.pjsk_stamp_base stamp.pjsk_stamp_refresh stamp.pjsk_stamp_refresh_batch stamp.pjsk_stamp_base_delete -->
 ## 💬 表情
 
+<!-- sekai-light: stamp.pjsk_stamp -->
 ### 获取或制作表情
 `/pjsk表情` `/pjsk stamp`
 > 获取或制作表情   
@@ -1060,6 +1297,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/pjsk表情 123 你好世界` 使用文本生成id为123的DIY表情，文本为"你好世界"
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_rand_stamp -->
 ### 获取或制作随机表情
 `/pjsk随机表情` `/pjsk rand stamp` `/随机表情`
 > 获取或制作随机表情     
@@ -1074,6 +1313,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/pjsk随机表情 miku 你好世界` 随机制作一个miku的表情，文本为"你好世界"
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp_base -->
 ### 查看表情底图
 `/pjsk表情底图` `/pjsk stamp base`
 > 查看某个表情的底图  
@@ -1083,6 +1324,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/pjsk表情底图 123 png` 查看id为123的表情底图，png格式
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp_refresh -->
 ### 刷新表情底图
 `/pjsk表情刷新` `/pjsk刷新表情` `/pjsk刷新表情底图` `/pjsk stamp refresh`
 > 刷新某个表情的底图，重新请求AI抠图，每日有使用次数限制   
@@ -1090,6 +1333,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/pjsk表情刷新 123` 刷新id为123的表情底图
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp_refresh_batch -->
 ### 批量刷新表情底图
 🛠️ `/pjsk表情刷新批量` `/pjsk stamp refresh batch`
 > 为所有单人表情全部生成底图，已经有人工或AI底图的会跳过
@@ -1097,6 +1342,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/pjsk表情刷新批量`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: stamp.pjsk_stamp_base_delete -->
 ### 删除表情底图
 🛠️ `/pjsk删除表情底图` `/pjsk remove stamp base`
 > 删除指定表情的底图，只能删除AI生成底图  
@@ -1104,10 +1351,14 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/pjsk删除表情底图 123 456`
 
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: entertainment.pjsk_guess_cover entertainment.pjsk_guess_chart entertainment.pjsk_guess_card entertainment.pjsk_guess_music entertainment.pjsk_spin_gacha entertainment.pjsk_entertainment_limit_check entertainment.pjsk_entertainment_limit -->
 ## 🎪 娱乐
 
+<!-- sekai-light: entertainment.pjsk_guess_cover -->
 ### 猜曲绘
 `/pjsk猜曲绘` `/pjsk猜曲封` `/猜曲绘` `/猜曲封` `/pjsk guess cover`
 > 猜曲绘，包含easy~master+append模式  
@@ -1117,6 +1368,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/猜曲绘` 开始默认expert模式猜曲绘
 - `/猜曲绘 master` 开始master模式猜曲绘
 
+<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_guess_chart -->
 ### 猜谱面
 `/pjsk猜谱面` `/pjsk猜铺面` `/猜谱面` `/猜铺面` `/pjsk guess chart`
 > 猜谱面，包含easy~master模式  
@@ -1126,6 +1379,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/猜谱面` 开始默认expert模式猜谱面
 - `/猜谱面 master` 开始master模式猜谱面
 
+<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_guess_card -->
 ### 猜卡面
 `/pjsk猜卡面` `/猜卡面` `/pjsk guess card`
 > 猜卡面是哪个角色的卡，包含easy~master+append模式  
@@ -1135,6 +1390,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/猜卡面` 开始默认expert模式猜卡面
 - `/猜卡面 master` 开始master模式猜卡面
 
+<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_guess_music -->
 ### 听歌识曲
 `/听歌识曲` `/pjsk听歌识曲` `/pjsk guess song` `/pjsk猜曲`
 > 听歌识曲，包含easy~master+append模式  
@@ -1144,6 +1401,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/听歌识曲` 开始默认expert模式听歌识曲
 - `/听歌识曲 master` 开始master模式听歌识曲
 
+<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_spin_gacha -->
 ### 模拟抽卡
 `/单抽` `/十连` `/50连` `/100连` `/150连` `/200连`
 > 模拟抽卡，默认使用最近的卡池     
@@ -1156,23 +1415,31 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/十连 eventmnr1` 模拟十连，指定卡池为mnr1箱的卡池
 - `/200连 -1` 模拟200连，指定当前倒数第一个卡池
 
+<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_entertainment_limit_check -->
 ### 查看娱乐功能使用情况
 `/pec` `/pjsk entertainment count` `/pjsk娱乐功能次数`
 > 查看群聊每日娱乐功能使用情况  
 
 - `/pec`
 
+<!-- /sekai-light -->
+<!-- sekai-light: entertainment.pjsk_entertainment_limit -->
 ### 设置娱乐功能使用上限
 🛠️ `/pel` `/pjsk entertainment limit` `/pjsk娱乐功能限制`
 > 设置群聊每日娱乐功能使用次数上限，默认100次  
 
 - `/pel 100`
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
+<!-- sekai-light: misc.chara_bd misc.pjsk_update misc.ngword misc.sekai_group_sub misc.sekai_group_unsub misc.pjsk_user_sta misc.pjsk_bind_history -->
 ## 其他
 
 
+<!-- sekai-light: misc.chara_bd -->
 ### 查询角色生日
 `/生日` `/角色生日` `/pjsk chara birthday`
 > 查询角色下次生日有关信息  
@@ -1183,6 +1450,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/角色生日 miku` 查询miku的生日
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: misc.pjsk_update -->
 ### 刷新MasterData数据
 `/pjsk update` `/pjsk refresh`
 > 立刻检查MasterData数据更新  
@@ -1191,6 +1460,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/pjsk update`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: misc.ngword -->
 ### 查询文本中的屏蔽词
 `/pjsk屏蔽词` `/pjsk敏感词` `/pjsk ngword` `/pjsk ng`
 > 查询文本中是否出现对应区服的屏蔽词  
@@ -1200,19 +1471,31 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/pjsk屏蔽词`
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: misc.sekai_group_sub misc.sekai_group_unsub -->
 ### 开启/关闭群聊功能
-🛠️ `/pjsk开启` `/pjsk group sub` `/pjsk关闭` `/pjsk group unsub`
+🛠️ <!-- sekai-light: misc.sekai_group_sub -->`/pjsk开启`<!-- /sekai-light --> <!-- sekai-light: misc.sekai_group_sub -->`/pjsk group sub`<!-- /sekai-light --> <!-- sekai-light: misc.sekai_group_unsub -->`/pjsk关闭`<!-- /sekai-light --> <!-- sekai-light: misc.sekai_group_unsub -->`/pjsk group unsub`<!-- /sekai-light -->
+<!-- sekai-light: misc.sekai_group_sub misc.sekai_group_unsub -->
 > 在当前群聊开启或关闭指定功能，不加服务名则查看当前开启的和可以开启的功能    
+<!-- /sekai-light -->
 支持服务器: `所有`  
 
+<!-- sekai-light: misc.sekai_group_sub -->
 - `/pjsk开启` 查看当前开启的和可以开启的功能     
+<!-- /sekai-light -->
+<!-- sekai-light: misc.sekai_group_sub -->
 - `/pjsk开启 update` 开启 MasterData 版本更新通知
+<!-- /sekai-light -->
+<!-- sekai-light: misc.sekai_group_unsub -->
 - `/pjsk关闭 update` 关闭 MasterData 版本更新通知
+<!-- /sekai-light -->
 
 **功能列表**
 - `update` MasterData版本更新通知
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: misc.pjsk_user_sta -->
 ### 查询用户统计
 🛠️ `/用户统计` `/pjsk user sta`
 > 查询用户统计数据，加上`群`参数可以查询当前群聊的统计，加上`详细`参数可以查询详细数据
@@ -1222,6 +1505,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/用户统计 详细` 查询所有群聊的详细数据
 
 
+<!-- /sekai-light -->
+<!-- sekai-light: misc.pjsk_bind_history -->
 ### 查询绑定历史
 🛠️ `/绑定历史` `/绑定记录` `/pjsk bind his` `/pjsk bind history`
 > 查询用户绑定历史，可以查询某个qq号的绑定历史或某个游戏id的被绑定历史
@@ -1231,6 +1516,8 @@ mnr1箱对应的卡池: `eventmnr1`
 - `/绑定历史 123456789101123` 查询游戏id的被绑定历史
 
 
+<!-- /sekai-light -->
+<!-- /sekai-light -->
 ---
 
 [回到帮助目录](./main.md)

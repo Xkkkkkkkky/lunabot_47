@@ -16,7 +16,7 @@ async def get_res_icon(ctx: SekaiHandlerContext, res_type: str, res_id: int = No
     """
     获取资源图标
     """
-    res_image = UNKNOWN_IMG
+    res_image = None
     if res_type in ['jewel', 'paid_jewel', 'virtual_coin', 'coin']:
         if res_type == 'paid_jewel': res_type = 'jewel'
         res_image = await ctx.rip.img(f"thumbnail/common_material_rip/{res_type}.png", use_img_cache=True)
@@ -36,6 +36,8 @@ async def get_res_icon(ctx: SekaiHandlerContext, res_type: str, res_id: int = No
     elif res_type == 'stamp':
         asset_name = (await ctx.md.stamps.find_by_id(res_id))['assetbundleName']
         res_image = await ctx.rip.img(f"stamp/{asset_name}_rip/{asset_name}.png")
+    if res_image is None:
+        res_image = create_missing_resource_image(f"resource/{res_type}/{res_id}")
     return res_image
 
 
@@ -63,7 +65,7 @@ async def get_res_box_info(ctx: SekaiHandlerContext, purpose: str, bid: int, ima
                 if image_size:
                     res_image = resize_keep_ratio(res_image, image_size * RES_BOX_ICON_SCALE.get(res_type, 0.6), 'h')
             except Exception as e:
-                res_image = UNKNOWN_IMG
+                res_image = create_missing_resource_image(f"resource/{res_type}/{res_id}")
                 if image_size:
                     res_image = resize_keep_ratio(res_image, image_size * 0.6, 'h')
                 logger.warning(f"获取资源 type={res_type} id={res_id} 图片失败: {e}")

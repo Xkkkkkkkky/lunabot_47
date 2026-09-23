@@ -57,7 +57,16 @@ class SekaiHandlerContext(HandlerContext):
             return self.block(f"{self.region}_{key}", timeout=timeout, err_msg=err_msg)
 
 
-class SekaiCmdHandler(CmdHandler):
+class SekaiPlainCmdHandler(CmdHandler):
+    """不解析区服的 Sekai 指令，同样受轻量模式控制。"""
+
+    def __init__(self, commands, logger=logger, *, command_key: str, **kwargs):
+        # 在通用处理器的最早入口禁用，避免帮助、限流或错误提示先行响应。
+        kwargs['disabled'] = kwargs.get('disabled', False) or not is_sekai_command_enabled(command_key)
+        super().__init__(commands, logger, **kwargs)
+
+
+class SekaiCmdHandler(SekaiPlainCmdHandler):
     DEFAULT_AVAILABLE_REGIONS = ENABLED_SERVER_REGIONS
 
     def __init__(
@@ -161,11 +170,11 @@ class SekaiCmdHandler(CmdHandler):
 
 
 # 设置默认指令区服
-default_region = CmdHandler([
+default_region = SekaiPlainCmdHandler([
     "/pjsk默认服务器", "/pjsk default region", "/pjsk默认区服",
     "/pjsk服务器", "/pjsk区服",
-], logger)
-default_region.check_cdrate(cd).check_wblist(gbl)
+], logger, command_key='account.default_region')
+default_region.check_cdrate(cd).check_wblist(gwl)
 @default_region.handle()
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip()

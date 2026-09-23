@@ -938,7 +938,7 @@ class RegionRipAssetManger:
         path: str, 
         use_cache=True, 
         allow_error=True, 
-        default=UNKNOWN_IMG, 
+        default=MISSING_RESOURCE_IMAGE,
         cache_expire_secs=None, 
         timeout: Union[int, ConfigItem]=DEFAULT_GET_RIP_ASSET_TIMEOUT_CFG,
         use_img_cache: bool=False,
@@ -949,7 +949,7 @@ class RegionRipAssetManger:
         - `path`: 解包资源路径
         - `use_cache`: 是否使用缓存
         - `allow_error`: 是否允许错误
-        - `default`: 允许错误的情况下的默认值
+        - `default`: 允许错误的情况下的默认值；未指定时生成带资源名的渐变缺图提示
         - `cache_expire_secs`: 缓存过期时间
         - `timeout`: 超时时间
         - `use_img_cache`: 是否使用图片缓存
@@ -958,7 +958,7 @@ class RegionRipAssetManger:
         # 尝试从图片缓存加载
         if use_img_cache and path in self.cached_images:
             return self.cached_images[path]
-        data = await self.get_asset(path, use_cache, allow_error, default, cache_expire_secs, get_cfg_or_value(timeout))
+        data = await self.get_asset(path, use_cache, allow_error, None, cache_expire_secs, get_cfg_or_value(timeout))
         try: 
             img = open_image(io.BytesIO(data))
             if use_img_cache:
@@ -980,6 +980,9 @@ class RegionRipAssetManger:
         if not allow_error:
             raise Exception(f"解析下载的 {self.region} 解包资源 {path} 为图片失败")
         logger.warning(f"解析下载的 {self.region} 解包资源 {path} 为图片失败: 返回默认值")
+        # 只在失败时生成占位图；显式传入 None 或自定义图片的调用仍保持原行为。
+        if default is MISSING_RESOURCE_IMAGE:
+            return create_missing_resource_image(f"{self.region}/{path}")
         return default
     
     async def json(
@@ -1079,7 +1082,8 @@ class WebJsonRes:
             dump_json(self.data, self.file_cache_path, indent=False)
     
     async def _check_before_get(self, timeout: float, raise_on_no_data: bool):
-        if not self.data or not self.update_interval or datetime.now() - self.update_time > self.update_interval:
+        # 本地缓存没有成功下载时间，需要重试更新，不能用空时间计算间隔。
+        if not self.data or not self.update_interval or self.update_time is None or datetime.now() - self.update_time > self.update_interval:
             try:
                 await asyncio.wait_for(self._download(), timeout)
             except Exception as e:
@@ -1096,15 +1100,15 @@ class WebJsonRes:
                         logger.warning(f"更新网页Json资源 [{self.name}] 失败: {get_exc_desc(e)}，返回None")
                         self.data = None
 
-    async def get(self, timeout: float = 5.0, raise_on_no_data: bool = True) -> Any | None:
+    async def get(self, timeout: float = 15.0, raise_on_no_data: bool = True) -> Any | None:
         await self._check_before_get(timeout, raise_on_no_data)
         return self.data
     
-    async def get_update_time(self, timeout: float = 5.0, raise_on_no_data: bool = True) -> datetime | None:
+    async def get_update_time(self, timeout: float = 15.0, raise_on_no_data: bool = True) -> datetime | None:
         await self._check_before_get(timeout, raise_on_no_data)
         return self.update_time
     
-    async def get_hash(self, timeout: float = 5.0, raise_on_no_data: bool = True) -> str | None:
+    async def get_hash(self, timeout: float = 15.0, raise_on_no_data: bool = True) -> str | None:
         await self._check_before_get(timeout, raise_on_no_data)
         return self.hash
     

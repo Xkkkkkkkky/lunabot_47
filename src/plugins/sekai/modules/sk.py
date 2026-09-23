@@ -432,7 +432,7 @@ async def compose_skp_image(ctx: SekaiHandlerContext) -> Image.Image:
                     TextBox(update_time_text, style, overflow='clip').set_bg(bg).set_size((gw, gh)).set_content_align('c').set_padding((0, 0))
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成整体榜线图片
 async def compose_skl_image(ctx: SekaiHandlerContext, event: dict = None, full: bool = False) -> Image.Image:
@@ -495,7 +495,7 @@ async def compose_skl_image(ctx: SekaiHandlerContext, event: dict = None, full: 
                 TextBox("暂无榜线数据", TextStyle(font=DEFAULT_BOLD_FONT, size=24, color=BLACK)).set_padding(32)
     
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成时速图片
 async def compose_sks_image(ctx: SekaiHandlerContext, unit: str, event: dict = None, period: timedelta = None) -> Image.Image:
@@ -582,7 +582,7 @@ async def compose_sks_image(ctx: SekaiHandlerContext, unit: str, event: dict = N
                 TextBox("暂无时速数据", TextStyle(font=DEFAULT_BOLD_FONT, size=24, color=BLACK)).set_padding(32)
     
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
     
 # 从文本获取sk查询参数 (类型，值) 类型: 'name' 'uid' 'rank' 'ranks'
 async def parse_sk_query_params(ctx: SekaiHandlerContext, args: str) -> Tuple[str, Union[str, int, List[int]]]:
@@ -722,7 +722,7 @@ async def compose_sk_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[str
                     TextBox(text, style)
     
     add_watermark(canvas)
-    return await canvas.get_img(1.5)
+    return await render_sekai_canvas(canvas, 1.5)
 
 # 合成查房图片
 async def compose_cf_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[str, int], event: dict = None) -> Image.Image:
@@ -877,7 +877,7 @@ async def compose_cf_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[str
                     TextBox(text, style)
     
     add_watermark(canvas)
-    return await canvas.get_img(1.5)
+    return await render_sekai_canvas(canvas, 1.5)
 
 # 合成查水表图片
 async def compose_csb_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[str, int], event: dict = None) -> Image.Image:
@@ -1037,7 +1037,7 @@ async def compose_csb_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[st
                             TextBox(*text)
     
     add_watermark(canvas)
-    return await canvas.get_img(1.5 if len(texts) < 10 else 1.0)
+    return await render_sekai_canvas(canvas, 1.5 if len(texts) < 10 else 1.0)
 
 # 合成玩家追踪图片
 async def compose_player_trace_image(ctx: SekaiHandlerContext, qtype: str, qval: Union[str, int], event: dict = None) -> Image.Image:
@@ -1165,7 +1165,7 @@ async def compose_player_trace_image(ctx: SekaiHandlerContext, qtype: str, qval:
                 ImageBox(get_chara_icon_by_chara_id(wl_cid), size=(None, 50))
                 TextBox("单榜", TextStyle(font=DEFAULT_BOLD_FONT, size=24, color=BLACK))
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成排名追踪图片
 async def compose_rank_trace_image(ctx: SekaiHandlerContext, rank: int, event: dict = None) -> Image.Image:
@@ -1343,7 +1343,7 @@ async def compose_rank_trace_image(ctx: SekaiHandlerContext, rank: int, event: d
                 ImageBox(get_chara_icon_by_chara_id(wl_cid), size=(None, 50))
                 TextBox("单榜", TextStyle(font=DEFAULT_BOLD_FONT, size=24, color=BLACK))
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 获取胜率预测数据
 async def get_winrate_predict_data(ctx: SekaiHandlerContext):
@@ -1427,7 +1427,7 @@ async def compose_winrate_predict_image(ctx: SekaiHandlerContext) -> Image.Image
                                         TextStyle(font=DEFAULT_FONT, size=28, color=(100, 25, 75, 255)))
                             
     add_watermark(canvas)
-    return await canvas.get_img(2.)
+    return await render_sekai_canvas(canvas, 2.)
 
 
 # ======================= 指令处理 ======================= #
@@ -1436,8 +1436,8 @@ async def compose_winrate_predict_image(ctx: SekaiHandlerContext) -> Image.Image
 pjsk_skp = SekaiCmdHandler([
     "/pjsk sk predict", "/pjsk board predict",
     "/sk预测", "/榜线预测", "/skp",
-], prefix_args=['', 'wl'])
-pjsk_skp.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_skp')
+pjsk_skp.check_cdrate(cd).check_wblist(gwl)
 @pjsk_skp.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1454,8 +1454,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_skl = SekaiCmdHandler([
     "/pjsk sk line", "/pjsk board line",
     "/sk线", "/skl", "/榜线",
-], prefix_args=['', 'wl'])
-pjsk_skl.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_skl')
+pjsk_skl.check_cdrate(cd).check_wblist(gwl)
 @pjsk_skl.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1489,8 +1489,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_sks = SekaiCmdHandler([
     "/pjsk sk speed", "/pjsk board speed",
     "/时速", "/sks", "/skv", "/sk时速",
-], prefix_args=['', 'wl'])
-pjsk_sks.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_sks')
+pjsk_sks.check_cdrate(cd).check_wblist(gwl)
 @pjsk_sks.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1510,8 +1510,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_skds = SekaiCmdHandler([
     "/pjsk sk daily speed", "/pjsk board daily speed",
     "/日速", "/skds", "/skdv", "/sk日速",
-], prefix_args=['', 'wl'])
-pjsk_skds.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_skds')
+pjsk_skds.check_cdrate(cd).check_wblist(gwl)
 @pjsk_skds.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1531,8 +1531,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_sk = SekaiCmdHandler([
     "/pjsk sk board", "/pjsk board",
     "/sk", 
-], prefix_args=['', 'wl'])
-pjsk_sk.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_sk')
+pjsk_sk.check_cdrate(cd).check_wblist(gwl)
 @pjsk_sk.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1548,8 +1548,8 @@ async def _(ctx: SekaiHandlerContext):
 # 查房
 pjsk_cf = SekaiCmdHandler([
     "/cf", "/查房", "/pjsk查房",
-], prefix_args=['', 'wl'])
-pjsk_cf.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_cf')
+pjsk_cf.check_cdrate(cd).check_wblist(gwl)
 @pjsk_cf.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1565,8 +1565,8 @@ async def _(ctx: SekaiHandlerContext):
 # 查水表
 pjsk_csb = SekaiCmdHandler([
     "/csb", "/查水表", "/pjsk查水表", "/停车时间",
-], prefix_args=['', 'wl'])
-pjsk_csb.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_csb')
+pjsk_csb.check_cdrate(cd).check_wblist(gwl)
 @pjsk_csb.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1582,8 +1582,8 @@ async def _(ctx: SekaiHandlerContext):
 # 玩家追踪
 pjsk_ptr = SekaiCmdHandler([
     "/ptr", "/玩家追踪", "/pjsk玩家追踪",
-], prefix_args=['', 'wl'])
-pjsk_ptr.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_ptr')
+pjsk_ptr.check_cdrate(cd).check_wblist(gwl)
 @pjsk_ptr.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1600,8 +1600,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_rtr = SekaiCmdHandler([
     "/rtr", "/skt", "/追踪", "/pjsk追踪", 
     "/sklt", "/sktl", "/分数线追踪", "/pjsk分数线追踪",
-], prefix_args=['', 'wl'])
-pjsk_rtr.check_cdrate(cd).check_wblist(gbl)
+], prefix_args=['', 'wl'], command_key='ranking.pjsk_rtr')
+pjsk_rtr.check_cdrate(cd).check_wblist(gwl)
 @pjsk_rtr.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip() + ctx.prefix_arg
@@ -1621,8 +1621,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_winrate = SekaiCmdHandler([
     "/pjsk winrate predict",
     "/胜率预测", "/5v5预测", "/胜率", "/5v5胜率", "/预测胜率", "/预测5v5",
-], regions=['jp'])
-pjsk_winrate.check_cdrate(cd).check_wblist(gbl)
+], regions=['jp'], command_key='ranking.pjsk_winrate')
+pjsk_winrate.check_cdrate(cd).check_wblist(gwl)
 @pjsk_winrate.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_msg(await get_image_cq(

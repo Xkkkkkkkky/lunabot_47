@@ -441,8 +441,8 @@ def get_guess_music_stop_fn(guess_type: str):
 pjsk_entertainment_limit = SekaiCmdHandler([
     "/pjsk entertainment limit", "/pjsk_entertainment_limit", 
     "/pjsk娱乐功能上限", "/pel",
-], regions=['jp'])
-pjsk_entertainment_limit.check_cdrate(cd).check_wblist(gbl).check_superuser()
+], regions=['jp'], command_key='entertainment.pjsk_entertainment_limit')
+pjsk_entertainment_limit.check_cdrate(cd).check_wblist(gwl).check_superuser()
 @pjsk_entertainment_limit.handle()
 async def _(ctx: SekaiHandlerContext):
     limit = int(ctx.get_args().strip())
@@ -458,8 +458,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_entertainment_limit_check = SekaiCmdHandler([
     "/pjsk entertainment count", "/pjsk_entertainment_count",
     "/pjsk娱乐功能次数", "/pec",
-], regions=['jp'])
-pjsk_entertainment_limit_check.check_cdrate(cd).check_wblist(gbl)
+], regions=['jp'], command_key='entertainment.pjsk_entertainment_limit_check')
+pjsk_entertainment_limit_check.check_cdrate(cd).check_wblist(gwl)
 @pjsk_entertainment_limit_check.handle()
 async def _(ctx: SekaiHandlerContext):
     group_id = str(ctx.group_id)
@@ -479,8 +479,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_guess_cover = SekaiCmdHandler([
     "/pjsk guess cover", "/pjsk_guess_cover", 
     "/pjsk猜曲封", "/pjsk猜曲绘", "/猜曲绘", "/猜曲封",
-], regions=['jp'])
-pjsk_guess_cover.check_cdrate(cd).check_wblist(gbl)
+], regions=['jp'], command_key='entertainment.pjsk_guess_cover')
+pjsk_guess_cover.check_cdrate(cd).check_wblist(gwl)
 @pjsk_guess_cover.handle()
 async def _(ctx: SekaiHandlerContext):
     check_daily_entertainment_limit(ctx)
@@ -512,8 +512,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_guess_chart = SekaiCmdHandler([
     "/pjsk guess chart", "/pjsk_guess_chart", 
     "/pjsk猜谱面", "/猜谱面", "/pjsk猜铺面", "/猜铺面",
-], regions=['jp'])
-pjsk_guess_chart.check_cdrate(cd).check_wblist(gbl)
+], regions=['jp'], command_key='entertainment.pjsk_guess_chart')
+pjsk_guess_chart.check_cdrate(cd).check_wblist(gwl)
 @pjsk_guess_chart.handle()
 async def _(ctx: SekaiHandlerContext):
     check_daily_entertainment_limit(ctx)
@@ -558,8 +558,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_guess_card = SekaiCmdHandler([
     "/pjsk guess card", "/pjsk_guess_card", 
     "/pjsk猜卡面", "/猜卡面", "/pjsk猜卡", "/猜卡",
-], regions=['jp'])
-pjsk_guess_card.check_cdrate(cd).check_wblist(gbl)
+], regions=['jp'], command_key='entertainment.pjsk_guess_card')
+pjsk_guess_card.check_cdrate(cd).check_wblist(gwl)
 @pjsk_guess_card.handle()
 async def _(ctx: SekaiHandlerContext):
     check_daily_entertainment_limit(ctx)
@@ -608,8 +608,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_guess_music = SekaiCmdHandler([
     "/pjsk guess music", "/pjsk_guess_music", 
     "/听歌识曲", "/pjsk听歌识曲", "/猜歌", "/pjsk猜歌", "/猜曲", "/pjsk猜曲",
-], regions=['jp'])
-pjsk_guess_music.check_cdrate(cd).check_wblist(gbl)
+], regions=['jp'], command_key='entertainment.pjsk_guess_music')
+pjsk_guess_music.check_cdrate(cd).check_wblist(gwl)
 @pjsk_guess_music.handle()
 async def _(ctx: SekaiHandlerContext):
     check_daily_entertainment_limit(ctx)
@@ -646,8 +646,8 @@ async def _(ctx: SekaiHandlerContext):
 # 模拟抽卡
 pjsk_spin_gacha = SekaiCmdHandler([
     "/单抽", "/十连", *[f"/{x}连" for x in (10, 50, 100, 150, 200)],
-])
-pjsk_spin_gacha.check_cdrate(cd).check_wblist(gbl)
+], command_key='entertainment.pjsk_spin_gacha')
+pjsk_spin_gacha.check_cdrate(cd).check_wblist(gwl)
 @pjsk_spin_gacha.handle()
 async def _(ctx: SekaiHandlerContext):
     check_daily_entertainment_limit(ctx)

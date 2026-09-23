@@ -1,6 +1,8 @@
 from ..utils import *
 from .common import *
 from .handler import SekaiHandlerContext
+from ..draw.bg import generate_organic_gradient_background
+from copy import copy as _copy
 
 
 # 通过角色ID获取角色头像
@@ -35,13 +37,6 @@ def get_chara_icon_by_nickname(nickname: str, size: int = None, raise_exc=True, 
 # 获取团logo
 def get_unit_logo(unit: str, size: int = None):
     img = SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION).static_imgs.get(f"logo_{unit}.png")
-    if size is not None:
-        img = img.resize((size, size))
-    return img
-
-# 获取团图标
-def get_unit_icon(unit: str, size: int = None):
-    img = SekaiHandlerContext.from_region(DEFAULT_SERVER_REGION).static_imgs.get(f"icon_{unit}.png")
     if size is not None:
         img = img.resize((size, size))
     return img
@@ -106,6 +101,83 @@ def create_sekai_canvas(
     if height is not None:
         canvas.set_h(height)
     return canvas
+
+
+def _matte_background(background):
+    """仅调整 Sekai 方框的装饰，保留颜色、透明度、圆角与自定义模糊。"""
+    if not isinstance(background, RoundRectBg):
+        return background
+    background = _copy(background)
+    background.stroke = None
+    background.blurglass_kwargs = {
+        "blur": 10,
+        **(background.blurglass_kwargs or {}),
+        "shadow_width": 2,
+        "shadow_alpha": 0.0,
+        "edge_strength": 0.0,
+    }
+    return background
+
+
+def _matte_item_background(factory):
+    # 表格允许通过回调生成单元格背景，延迟到绘制时处理，避免提前执行回调。
+    def background(*args):
+        return _matte_background(factory(*args))
+    return background
+
+
+async def render_sekai_canvas(canvas: Canvas, scale=None, cache_key=None) -> Image.Image:
+    """统一磨砂方框；没有明确图片背景时，用页面已有素材生成有机渐变。"""
+    # 先完成父容器布局，再读取素材显示尺寸，避免提前缓存子控件尺寸影响排版。
+    canvas_size = canvas._get_self_size()
+    images = {}
+    needs_background = not isinstance(canvas.bg, ImageBg)
+    stack = [canvas]
+    while stack:
+        widget = stack.pop()
+        widget.bg = _matte_background(widget.bg)
+        if hasattr(widget, 'item_bg'):
+            widget.item_bg = (
+                _matte_item_background(widget.item_bg)
+                if callable(widget.item_bg) else _matte_background(widget.item_bg)
+            )
+        if needs_background and isinstance(widget, ImageBox):
+            # 按页面实际显示面积挑选主素材，避免大量小图标主导配色。
+            width, height = widget._get_self_size()
+            key = id(widget.image)
+            previous = images.get(key)
+            if previous is None or width * height > previous[0]:
+                images[key] = (width * height, widget.image)
+        stack.extend(reversed(getattr(widget, 'items', ())))
+
+    # 剧情页已生成的背景、活动原图及用户配置的背景图片均直接保留。
+    if needs_background:
+        size_limit = global_config.get('plot.canvas_size_limit')
+        assert canvas_size[0] * canvas_size[1] <= size_limit[0] * size_limit[1], \
+            f'Canvas size is too large ({canvas_size[0]}x{canvas_size[1]})'
+        sources = sorted(images.values(), key=lambda item: item[0], reverse=True)[:16]
+        if sources:
+            # 小尺寸拼图只用于取色，不改变原素材或页面上的图片。
+            source = Image.new('RGBA', (128, 128), (0, 0, 0, 0))
+            for index, (_, img) in enumerate(sources):
+                thumb = img.convert('RGBA')
+                thumb.thumbnail((32, 32), Image.Resampling.LANCZOS)
+                source.paste(thumb, ((index % 4) * 32, (index // 4) * 32))
+        else:
+            # 纯文字/表格页面没有可取色图片，使用当前 Sekai 主题色生成同款渐变。
+            palette = resolve_draw_palette(config)
+            source = Image.new('RGBA', (len(palette), 1))
+            source.putdata(palette)
+        background = await asyncio.to_thread(
+            generate_organic_gradient_background,
+            source,
+            canvas_size,
+            saturation=0.75,
+            distortion=1.20,
+            blur=0.035,
+        )
+        canvas.set_bg(ImageBg(background, mode='fill', fade=0))
+    return await canvas.get_img(scale=scale, cache_key=cache_key)
 
 
 # 使用已部署的标题及团体背景，避免随机选中未提供的旧区域背景。

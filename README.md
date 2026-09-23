@@ -34,6 +34,7 @@ Note: This project is for reference and learning purposes only, and is **not** a
 #### 2. Setup Configurations
 
 - Copy the configuration from the `example_config` directory to the `config` directory and fill in the missing content as needed.
+- Example files intentionally leave deployment URLs, API keys, tokens, and account or group IDs blank. Fill these only in the local, ignored `config` directory.
 
 - Rename `.env.example` to `.env`.
 

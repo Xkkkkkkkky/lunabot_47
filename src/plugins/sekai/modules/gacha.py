@@ -211,7 +211,7 @@ async def get_rarity_img(ctx: SekaiHandlerContext, rarity: str) -> Optional[Imag
     return await run_in_pool(concat_images, [rare_img] * rare_num, 'h')
 
 # 获取卡池的banner
-async def get_gacha_banner(ctx: SekaiHandlerContext, gacha_or_gacha_id: Union[Gacha, int], default=UNKNOWN_IMG) -> Optional[Image.Image]:
+async def get_gacha_banner(ctx: SekaiHandlerContext, gacha_or_gacha_id: Union[Gacha, int], default=MISSING_RESOURCE_IMAGE) -> Optional[Image.Image]:
     if isinstance(gacha_or_gacha_id, Gacha):
         gacha_id = gacha_or_gacha_id.id
     else:
@@ -220,7 +220,7 @@ async def get_gacha_banner(ctx: SekaiHandlerContext, gacha_or_gacha_id: Union[Ga
     return await ctx.rip.img(banner_path, use_img_cache=True, default=default)
 
 # 获取卡池的logo
-async def get_gacha_logo(ctx: SekaiHandlerContext, gacha_or_gacha_id: Union[Gacha, int], default=UNKNOWN_IMG) -> Optional[Image.Image]:
+async def get_gacha_logo(ctx: SekaiHandlerContext, gacha_or_gacha_id: Union[Gacha, int], default=MISSING_RESOURCE_IMAGE) -> Optional[Image.Image]:
     if isinstance(gacha_or_gacha_id, Gacha):
         gacha = gacha_or_gacha_id
     else:
@@ -412,7 +412,7 @@ async def compose_gacha_list_image(ctx: SekaiHandlerContext, filter: GachaFilter
                             TextBox(f"T {g.end_at.strftime('%Y-%m-%d %H:%M')}", style2)
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 合成卡池详情图片
 async def compose_gacha_detail_image(ctx: SekaiHandlerContext, gacha: Gacha):
@@ -432,7 +432,7 @@ async def compose_gacha_detail_image(ctx: SekaiHandlerContext, gacha: Gacha):
             after_training=has_after_training(await ctx.md.cards.find_by_id(first_pickup)),
             allow_error=True,
         )
-        if card_img != UNKNOWN_IMG:
+        if not is_missing_resource_image(card_img):
             bg = ImageBg(card_img)
 
     # 抽卡概率信息
@@ -558,7 +558,7 @@ async def compose_gacha_detail_image(ctx: SekaiHandlerContext, gacha: Gacha):
                 
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 模拟抽卡
 async def spin_gacha(ctx: SekaiHandlerContext, gacha: Gacha, count: int) -> List[GachaSpinResult]:
@@ -647,7 +647,7 @@ async def compose_gacha_spin_image(ctx: SekaiHandlerContext, gacha: Gacha, cards
                             .set_size((thumb_size, thumb_size)).set_content_align('c').set_bg(roundrect_bg())
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 # 获取卡牌对应卡池
 async def get_gacha_by_card_id(ctx: SekaiHandlerContext, cid: int) -> Optional[Gacha]:
@@ -879,7 +879,7 @@ async def compose_gacha_record_image(ctx: SekaiHandlerContext, qid: int, spec_gi
                     TextBox(f"{hide_num}条抽卡记录已隐藏，可指定卡池ID查看", style2, use_real_line_count=True).set_padding(8)
 
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 
 # ======================= 指令处理 ======================= #
@@ -887,8 +887,8 @@ async def compose_gacha_record_image(ctx: SekaiHandlerContext, qid: int, spec_gi
 # 查卡池
 pjsk_gacha = SekaiCmdHandler([
     "/pjsk gacha", "/卡池列表", "/卡池一览", "/卡池", "/查卡池", 
-])
-pjsk_gacha.check_cdrate(cd).check_wblist(gbl)
+], command_key='card.pjsk_gacha')
+pjsk_gacha.check_cdrate(cd).check_wblist(gwl)
 @pjsk_gacha.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -918,8 +918,8 @@ async def _(ctx: SekaiHandlerContext):
 # 抽卡记录
 pjsk_gacha_record = SekaiCmdHandler([
     "/pjsk gacha record", "/抽卡记录", "/抽卡历史",
-])
-pjsk_gacha_record.check_cdrate(cd).check_wblist(gbl)
+], command_key='card.pjsk_gacha_record')
+pjsk_gacha_record.check_cdrate(cd).check_wblist(gwl)
 @pjsk_gacha_record.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()

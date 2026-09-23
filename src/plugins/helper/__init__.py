@@ -1,4 +1,5 @@
 from ..utils import *
+from ..common.sekai_help import render_sekai_help
 import glob
 
 config = Config('helper')
@@ -65,9 +66,14 @@ async def _(ctx: HandlerContext):
             # 尝试从缓存读取
             doc_path = HELP_DOCS_PATH.format(name=args)
             doc_mtime = os.path.getmtime(doc_path)
+            doc_text = Path(doc_path).read_text()
+            if args == 'sekai':
+                doc_text = render_sekai_help(doc_text)
             cache_mtime = file_db.get('help_img_cache_mtime', {})
             cache_signature = get_md5(
                 f'{doc_mtime}:{get_markdown_style_signature()}'
+                # 轻量模式每次按当前开关过滤，不能复用其他开关组合的图片。
+                + (f':{get_md5(doc_text)}' if args == 'sekai' else '')
             )
             cache_path = create_parent_folder(f"data/helper/cache/{args}.png")
             if (
@@ -77,7 +83,6 @@ async def _(ctx: HandlerContext):
                 return await ctx.asend_reply_msg(await get_image_cq(cache_path, low_quality=True))
             else:
                 logger.info(f"缓存 {args} 帮助文档不存在或已过期，重新渲染")
-                doc_text = Path(doc_path).read_text()
                 image = await markdown_to_image(doc_text, width=HELP_IMG_WIDTH)
                 image = image.resize((int(image.width * HELP_IMG_SCALE), int(image.height * HELP_IMG_SCALE)))
                 # 如果长度过长，截成几段再横向拼接发送

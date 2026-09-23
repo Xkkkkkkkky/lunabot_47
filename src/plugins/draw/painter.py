@@ -558,6 +558,7 @@ class LinearGradient(Gradient):
         t_clamped = np.clip(t, 0, 1) 
         return self._lerp_color(t_clamped, mode)
 
+
 class RadialGradient(Gradient):
     def __init__(self, c1: Color, c2: Color, center: Position, radius: float):
         self.c1 = c1
@@ -1099,6 +1100,7 @@ class Painter:
         shadow_width: int=6,
         shadow_alpha: float=0.3,
         corners = (True, True, True, True),
+        edge_strength: float=0.6,
         exclude_on_hash: bool = False
     ):
         """
@@ -1113,9 +1115,14 @@ class Painter:
             shadow_width: 阴影宽度
             shadow_alpha: 阴影透明度
             corners: 四个角的圆角启用状态，顺序为左上、右上、右下、左下
+            edge_strength: 边缘高光强度，设为0时关闭高光
             exclude_on_hash: 是否在哈希计算中排除此操作
         """
-        return self.add_operation("_impl_blurglass_roundrect", exclude_on_hash, (pos, size, fill, radius, blur, shadow_width, shadow_alpha, corners))
+        return self.add_operation(
+            "_impl_blurglass_roundrect",
+            exclude_on_hash,
+            (pos, size, fill, radius, blur, shadow_width, shadow_alpha, corners, edge_strength),
+        )
 
     def draw_random_triangle_bg(
         self, 

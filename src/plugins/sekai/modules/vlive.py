@@ -111,14 +111,14 @@ async def compose_vlive_list_image(ctx: SekaiCmdHandler, vlives, title=None, tit
             for vlive in vlives:
                 await get_vlive_widget(ctx, vlive)
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 
 # ======================= 指令处理 ======================= #
 
 # 获取最近的vlive信息
-pjsk_live = SekaiCmdHandler(['/pjsk live', '/虚拟live', '/pjsk vlive', "/vlive",])
-pjsk_live.check_cdrate(cd).check_wblist(gbl)
+pjsk_live = SekaiCmdHandler(['/pjsk live', '/虚拟live', '/pjsk vlive', "/vlive",], command_key='vlive.pjsk_live')
+pjsk_live.check_cdrate(cd).check_wblist(gwl)
 @pjsk_live.handle()
 async def _(ctx: SekaiHandlerContext):
     now = datetime.now()

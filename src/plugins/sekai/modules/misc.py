@@ -27,8 +27,8 @@ md_update_group_sub = SekaiGroupSubHelper("update", "MasterData更新通知", EN
 
 pjsk_update = SekaiCmdHandler([
     "/pjsk update", "/pjsk refresh", "/pjsk更新",
-])
-pjsk_update.check_cdrate(cd).check_wblist(gbl)
+], command_key='misc.pjsk_update')
+pjsk_update.check_cdrate(cd).check_wblist(gwl)
 @pjsk_update.handle()
 async def _(ctx: SekaiHandlerContext):
     mgr = RegionMasterDbManager.get(ctx.region)
@@ -41,8 +41,8 @@ async def _(ctx: SekaiHandlerContext):
 ngword = SekaiCmdHandler([
     "/pjsk ng", "/pjsk ngword", "/pjsk ng word",
     "/pjsk屏蔽词", "/pjsk屏蔽", "/pjsk敏感", "/pjsk敏感词",
-])
-ngword.check_cdrate(cd).check_wblist(gbl)
+], command_key='misc.ngword')
+ngword.check_cdrate(cd).check_wblist(gwl)
 @ngword.handle()
 async def _(ctx: SekaiHandlerContext):
     text = ctx.get_args()
@@ -63,8 +63,8 @@ async def _(ctx: SekaiHandlerContext):
 
 upload_help = SekaiCmdHandler([
     "/抓包帮助", "/抓包", "/pjsk upload help",
-])
-upload_help.check_cdrate(cd).check_wblist(gbl)
+], command_key='account.upload_help')
+upload_help.check_cdrate(cd).check_wblist(gwl)
 @upload_help.handle()
 async def _(ctx: SekaiHandlerContext):
     text = Path(f"{SEKAI_CONFIG_DIR}/upload_help.txt").read_text(encoding="utf-8")
@@ -74,8 +74,8 @@ async def _(ctx: SekaiHandlerContext):
 card_extractor = CardExtractor()
 extract_card = SekaiCmdHandler([
     "/提取卡牌"
-], regions=['jp'])
-extract_card.check_cdrate(cd).check_wblist(gbl)
+], regions=['jp'], command_key='card.extract_card')
+extract_card.check_cdrate(cd).check_wblist(gwl)
 @extract_card.handle()
 async def _(ctx: SekaiHandlerContext):
     await ctx.block()
@@ -142,7 +142,7 @@ async def _(ctx: SekaiHandlerContext):
 
                         card = find_by_predicate(result.cards, lambda c: c.row_idx == row_idx and c.col_idx == col_idx)
                         if card is None:
-                            ImageBox(UNKNOWN_IMG, size=(w, w))
+                            ImageBox(create_missing_resource_image(f"card_extractor/grid/{row_idx}/{col_idx}"), size=(w, w))
                         else:
                             pcard = {
                                 'defaultImage': "special_training" if card.is_aftertraining else "normal",
@@ -156,7 +156,7 @@ async def _(ctx: SekaiHandlerContext):
         
     return await ctx.asend_reply_msg(
         await get_image_cq(
-            await canvas.get_img(),
+            await render_sekai_canvas(canvas),
             low_quality=True,
         )
     )
@@ -164,8 +164,8 @@ async def _(ctx: SekaiHandlerContext):
 
 chara_bd = SekaiCmdHandler([
     "/pjsk chara birthday", "/角色生日", "/生日",
-])
-chara_bd.check_cdrate(cd).check_wblist(gbl)
+], command_key='misc.chara_bd')
+chara_bd.check_cdrate(cd).check_wblist(gwl)
 @chara_bd.handle()
 async def _(ctx: SekaiHandlerContext):
     # 获取角色生日信息
@@ -295,15 +295,15 @@ async def _(ctx: SekaiHandlerContext):
 
     return await ctx.asend_reply_msg(
         await get_image_cq(
-            await canvas.get_img(),
+            await render_sekai_canvas(canvas),
             low_quality=True,
         )
     )
             
 
 
-heyiwei = SekaiCmdHandler(["/pjsk detail", ])
-heyiwei.check_cdrate(cd).check_wblist(gbl)
+heyiwei = SekaiCmdHandler(["/pjsk detail", ], command_key='misc.heyiwei')
+heyiwei.check_cdrate(cd).check_wblist(gwl)
 @heyiwei.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg('使用"/挑战信息"和"/加成信息"查询相关内容')
@@ -332,7 +332,7 @@ async def send_masterdata_update_notify(
     msg = msg.strip()
 
     for group_id in md_update_group_sub.get_all(region):
-        if not gbl.check_id(group_id): continue
+        if not gwl.check_id(group_id): continue
         try:
             await send_group_msg_by_bot(group_id, msg)
         except Exception as e:

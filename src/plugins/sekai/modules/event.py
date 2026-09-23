@@ -1,5 +1,6 @@
 from ...utils import *
 from ...llm import ChatSession, translate_text, get_model_preset, ChatSessionResponse
+from ...draw.bg import generate_organic_gradient_background
 from ..common import *
 from ..handler import *
 from ..asset import *
@@ -360,12 +361,18 @@ async def compose_event_list_image(ctx: SekaiHandlerContext, filter: EventListFi
     style1 = TextStyle(font=DEFAULT_HEAVY_FONT, size=10, color=(50, 50, 50))
     style2 = TextStyle(font=DEFAULT_FONT, size=10, color=(70, 70, 70))
     with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
-        with VSplit().set_padding(0).set_sep(4).set_content_align('lt').set_item_align('lt'):
-            TextBox(
-                f"活动按时间顺序排列，黄色为当期活动，灰色为过去活动",
-                TextStyle(font=DEFAULT_FONT, size=12, color=(0, 0, 100))
-            ).set_bg(roundrect_bg(radius=4)).set_padding(4)
-            with Grid(row_count=row_count, vertical=True).set_sep(8, 2).set_item_align('lt').set_content_align('lt'):
+        with VSplit().set_padding(0).set_sep(10).set_content_align('lt').set_item_align('lt'):
+            # 将原说明拆为标题、排序提示和状态图例，颜色与活动卡片保持一致。
+            with VSplit().set_padding((12, 9)).set_sep(5).set_content_align('lt').set_item_align('lt') \
+                    .set_bg(roundrect_bg(fill=(255, 255, 255, 225), radius=10)):
+                TextBox("活动列表", TextStyle(font=DEFAULT_HEAVY_FONT, size=17, color=(43, 51, 60))).set_padding(0)
+                TextBox("按时间顺序排列", TextStyle(font=DEFAULT_FONT, size=11, color=(92, 102, 111))).set_padding(0)
+                with HSplit().set_padding(0).set_sep(7).set_item_align('lt').set_content_align('lt'):
+                    TextBox("黄色 · 当期活动", TextStyle(font=DEFAULT_FONT, size=11, color=(108, 76, 21))) \
+                        .set_bg(roundrect_bg(fill=(255, 244, 191, 235), radius=7)).set_padding((7, 4))
+                    TextBox("灰色 · 过去活动", TextStyle(font=DEFAULT_FONT, size=11, color=(82, 91, 99))) \
+                        .set_bg(roundrect_bg(fill=(225, 229, 232, 235), radius=7)).set_padding((7, 4))
+            with Grid(row_count=row_count, vertical=True).set_sep(8, 8).set_item_align('lt').set_content_align('lt'):
                 for d in filtered_details:
                     now = datetime.now()
                     bg_color = WIDGET_BG_COLOR_CFG.get()
@@ -373,9 +380,9 @@ async def compose_event_list_image(ctx: SekaiHandlerContext, filter: EventListFi
                         bg_color = (255, 250, 220, 200)
                     elif now > d.end_time:
                         bg_color = (220, 220, 220, 200)
-                    bg = roundrect_bg(bg_color, 5)
+                    bg = roundrect_bg(bg_color, 8)
 
-                    with HSplit().set_padding(4).set_sep(4).set_item_align('lt').set_content_align('lt').set_bg(bg):
+                    with HSplit().set_padding(5).set_sep(5).set_item_align('lt').set_content_align('lt').set_bg(bg):
                         with VSplit().set_padding(0).set_sep(2).set_item_align('lt').set_content_align('lt'):
                             ImageBox(d.event_banner, size=(None, 40))
                             with Grid(col_count=3).set_padding(0).set_sep(1, 1):
@@ -388,7 +395,8 @@ async def compose_event_list_image(ctx: SekaiHandlerContext, filter: EventListFi
                             TextBox(f"T {d.end_time.strftime('%Y-%m-%d %H:%M')}", style2)
                             with HSplit().set_padding(0).set_sep(4):
                                 if d.bonus_attr: ImageBox(get_attr_icon(d.bonus_attr), size=(None, 24))
-                                if d.unit:  ImageBox(get_unit_icon(d.unit), size=(None, 24))
+                                # 团体使用简称展示，不依赖单独的团图标资源。
+                                if d.unit: TextBox(UNIT_ABBRS[d.unit].upper(), style2).set_h(24).set_content_align('c')
                                 if d.banner_cid: ImageBox(get_chara_icon_by_chara_id(d.banner_cid), size=(None, 24))
                                 if not any([d.unit, d.banner_cid, d.bonus_attr]): Spacer(24, 24)
 
@@ -406,7 +414,7 @@ async def compose_event_list_image(ctx: SekaiHandlerContext, filter: EventListFi
     ]):
         cache_key = f"{ctx.region}_events"
 
-    return await canvas.get_img(cache_key=cache_key)
+    return await render_sekai_canvas(canvas, cache_key=cache_key)
 
 # 根据"昵称箱数"（比如saki1）获取活动，不存在返回None
 async def get_event_by_ban_name(ctx: SekaiHandlerContext, ban_name: str) -> Optional[dict]:
@@ -502,13 +510,12 @@ async def compose_event_story_summary_msg_list(
 
         if i <= len(eps):
             text = summary.get(f'ep_{i}_summary', '')
-            text = add_watermark_to_text(text, STORYSUMMARY_WATERMARK)
         else:
             text = "(章节剧情未实装)"
 
         msg_lists.append(f"""
 【第{i}章】{summary.get(f'ep_{i}_title', ep['title'])}
-{await get_image_cq(await canvas.get_img())}
+{await get_image_cq(await render_sekai_canvas(canvas))}
 {text}
 """.strip())
     
@@ -520,7 +527,7 @@ async def compose_event_story_summary_msg_list(
         chara_talk_count_text += f"{name}: {count}\n"
     msg_lists.append(chara_talk_count_text.strip())
 
-    additional_info = "以上内容由LunaBot_47生成\n请勿转载\n"
+    additional_info = "以上内容由AI生成\n请勿转载\n"
     for phase in ['start', *[f'ep{i}' for i in range(1, len(eps) + 1)], 'end']:
         phase_info = summary.get(f'{phase}_additional_info', '')
         if phase_info:
@@ -530,6 +537,21 @@ async def compose_event_story_summary_msg_list(
     msg_lists.append(additional_info.strip())
         
     return msg_lists
+
+# 剧情总结磨砂卡片：保留半透明和背景模糊，关闭硬阴影与边缘高光。
+def get_story_glass_background() -> WidgetBg:
+    return roundrect_bg(
+        fill=(255, 255, 255, 150),
+        radius=18,
+        blurglass=True,
+        blurglass_kwargs={
+            "blur": 10,
+            "shadow_width": 2,
+            "shadow_alpha": 0.0,
+            "edge_strength": 0.0,
+        },
+    )
+
 
 # 合成活动剧情总结图片版
 async def compose_event_story_summary_image(
@@ -549,17 +571,17 @@ async def compose_event_story_summary_image(
 
     w = 720
     line_sep = 5
+    card_background = get_story_glass_background()
 
     with ProfileTimer("event_story.layout"):
         with create_sekai_canvas(background=SEKAI_BLUE_BG, padding=BG_PADDING) as canvas:
-            with VSplit().set_sep(8).set_item_align('lt').set_content_align('lt').set_item_bg(roundrect_bg()):
+            with VSplit().set_sep(8).set_item_align('lt').set_content_align('lt').set_item_bg(card_background):
                 with HSplit().set_padding(16).set_sep(16).set_item_align('l').set_content_align('l'):
                     ImageBox(banner_img, size=(None, 100))
                     with VSplit().set_padding(0).set_sep(4).set_item_align('l').set_content_align('l'):
                         TextBox(f"#{eid} {title}", style1)
                         TextBox(f"{summary.get('title', '')} - 剧情总结", style1)
-                        TextBox("剧透内容由AI生成，禁止盗转到【小红书】等社交平台", style2)
-                        TextBox("盗转蛆你🐴坟头上刻着的是你全家惨死的剧透", style2.replace(color=(200, 0, 0)))
+                        TextBox("内容由AI生成，请勿转载", style2)
                         
                 with VSplit().set_padding(16).set_sep(8).set_item_align('lt').set_content_align('lt'):
                     TextBox(f"剧情概要", style1)
@@ -580,7 +602,6 @@ async def compose_event_story_summary_image(
                                         ImageBox(icon, size=(32, 32), use_alphablend=True)
                             if i <= len(eps):
                                 text = summary.get(f'ep_{i}_summary', '')
-                                text = add_watermark_to_text(text, STORYSUMMARY_WATERMARK)
                             else:
                                 text = "(章节剧情未实装)"
                             TextBox(text, style2, use_real_line_count=True, line_sep=line_sep).set_w(w - 176)
@@ -588,7 +609,7 @@ async def compose_event_story_summary_image(
                 with VSplit().set_padding(16).set_sep(8).set_item_align('lt').set_content_align('lt'):
                     TextBox(f"剧情总结", style1)
                     text = summary.get('summary', '').strip()
-                    TextBox(add_watermark_to_text(text, STORYSUMMARY_WATERMARK), style2, use_real_line_count=True, line_sep=line_sep).set_w(w)
+                    TextBox(text, style2, use_real_line_count=True, line_sep=line_sep).set_w(w)
 
                 with VSplit().set_padding(16).set_sep(8).set_item_align('lt').set_content_align('lt'):
                     TextBox(f"角色对话次数", style1)
@@ -599,9 +620,20 @@ async def compose_event_story_summary_image(
                     TextBox(chara_talk_count_text, style2, use_real_line_count=True, line_sep=line_sep).set_w(w)
                     
         add_watermark(canvas)
+
+        # 画布高度取决于剧情内容，布局结束后再按实际尺寸生成完整背景。
+        background_image = generate_organic_gradient_background(
+            banner_img,
+            canvas._get_self_size(),
+            saturation=0.75,
+            distortion=1.20,
+            blur=0.035,
+            excluded_regions=((0.0, 0.0, 0.32, 0.22),),
+        )
+        canvas.set_bg(ImageBg(background_image, mode="fill", fade=0))
     
     with ProfileTimer("event_story.get_img"): 
-        return await canvas.get_img(cache_key=f"event_story_{ctx.region}_{eid}")
+        return await render_sekai_canvas(canvas, cache_key=f"event_story_{ctx.region}_{eid}")
 
 # 获取活动剧情总结，返回待发送的消息列表或图片
 async def get_event_story_summary(ctx: SekaiHandlerContext, event: dict, refresh: bool, summary_model: List[str], save: bool) -> list[str] | Image.Image:
@@ -922,7 +954,7 @@ async def compose_event_detail_image(ctx: SekaiHandlerContext, event: dict) -> I
                                     ImageBox(get_chara_icon_by_chara_id(cid), size=(None, 40))
 
         add_watermark(canvas)
-        return await canvas.get_img()
+        return await render_sekai_canvas(canvas)
 
     return await draw(w, h)
 
@@ -1012,7 +1044,7 @@ async def compose_event_record_image(ctx: SekaiHandlerContext, qid: int) -> Imag
                     await draw_events("WL单榜", user_worldblooms)
     
     add_watermark(canvas)
-    return await canvas.get_img()
+    return await render_sekai_canvas(canvas)
 
 
 # ======================= 指令处理 ======================= #
@@ -1020,8 +1052,8 @@ async def compose_event_record_image(ctx: SekaiHandlerContext, qid: int) -> Imag
 # 查活动（单个/多个）
 MULTI_EVENT_CMDS = ["/pjsk events", "/pjsk_events", "/events", "/活动列表", "/活动一览",]
 SINGLE_EVENT_CMDS = ["/pjsk event", "/pjsk_event", "/event", "/活动", "/查活动",]
-pjsk_event = SekaiCmdHandler(SINGLE_EVENT_CMDS + MULTI_EVENT_CMDS)
-pjsk_event.check_cdrate(cd).check_wblist(gbl)
+pjsk_event = SekaiCmdHandler(SINGLE_EVENT_CMDS + MULTI_EVENT_CMDS, command_key='event.pjsk_event')
+pjsk_event.check_cdrate(cd).check_wblist(gwl)
 @pjsk_event.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -1091,8 +1123,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_event_story = SekaiCmdHandler([
     "/pjsk event story", "/pjsk_event_story", 
     "/活动剧情", "/活动故事", "/活动总结",
-], regions=['jp'])
-pjsk_event_story.check_cdrate(cd).check_wblist(gbl)
+], regions=['jp'], command_key='event.pjsk_event_story')
+pjsk_event_story.check_cdrate(cd).check_wblist(gwl)
 @pjsk_event_story.handle()
 async def _(ctx: SekaiHandlerContext):
     args = ctx.get_args().strip()
@@ -1127,8 +1159,8 @@ async def _(ctx: SekaiHandlerContext):
 pjsk_event_record = SekaiCmdHandler([
     "/pjsk event record", "/pjsk_event_record", 
     "/活动记录", "/冲榜记录",
-])
-pjsk_event_record.check_cdrate(cd).check_wblist(gbl)
+], command_key='event.pjsk_event_record')
+pjsk_event_record.check_cdrate(cd).check_wblist(gwl)
 @pjsk_event_record.handle()
 async def _(ctx: SekaiHandlerContext):
     return await ctx.asend_reply_msg(await get_image_cq(

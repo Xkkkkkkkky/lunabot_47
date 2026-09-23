@@ -5,6 +5,7 @@ from .napcat_stream import (
     upload_file_via_napcat_stream,
 )
 from ..common.blacklist import HARDCODED_BLACKLIST_USERS
+from ..common.sekai_help import render_sekai_help
 from nonebot import on_command
 from nonebot import get_bot as nb_get_bot
 from nonebot import get_bots as nb_get_bots
@@ -2193,6 +2194,7 @@ class HelpDoc:
     """
     mtime: int
     parts: List[HelpDocCmdPart] = field(default_factory=list)
+    source_signature: str = ""
 
 
 SEG_COMMAND_SEPS = ['', ' ', '_']
@@ -2324,8 +2326,9 @@ class CmdHandler:
         names = set()
         all_md5 = set()
 
-        def parse_doc(path: str) -> List[HelpDocCmdPart]:
-            help_doc = Path(path).read_text(encoding="utf-8")
+        def parse_doc(path: str, help_doc: str = None) -> List[HelpDocCmdPart]:
+            if help_doc is None:
+                help_doc = Path(path).read_text(encoding="utf-8")
             doc_name = Path(path).stem
             parts = help_doc.split("---")[2:-1] # 每个小标题
             ret: List[HelpDocCmdPart] = []   # 每个指令的部分
@@ -2346,7 +2349,11 @@ class CmdHandler:
                 if len(lines) < 2: continue
                 start = lines[1].find("`")
                 if start == -1: continue
-                part.cmds = set(lines[1][start:].replace("` `", "%").replace("`", "").strip().split("%"))
+                if doc_name == 'sekai':
+                    # 行内过滤别名后可能留下多个空格，按 Markdown 代码片段提取。
+                    part.cmds = set(re.findall(r'`([^`]+)`', lines[1][start:]))
+                else:
+                    part.cmds = set(lines[1][start:].replace("` `", "%").replace("`", "").strip().split("%"))
                 part.md5 = get_md5(part.content)
                 # print(f"解析帮助: {part.doc_name} {part.cmds} {truncate(part.content, 50)}")
             return ret
@@ -2355,9 +2362,18 @@ class CmdHandler:
             try:
                 name = Path(path).stem
                 mtime = int(os.path.getmtime(path))
-                if name not in cls.help_docs or cls.help_docs[name].mtime < mtime:
-                    cls.help_docs[name] = HelpDoc(mtime=mtime)
-                    cls.help_docs[name].parts = parse_doc(path)
+                doc_text = None
+                signature = ""
+                if name == 'sekai':
+                    doc_text = render_sekai_help(Path(path).read_text(encoding="utf-8"))
+                    signature = get_md5(doc_text)
+                if (
+                    name not in cls.help_docs
+                    or cls.help_docs[name].mtime < mtime
+                    or cls.help_docs[name].source_signature != signature
+                ):
+                    cls.help_docs[name] = HelpDoc(mtime=mtime, source_signature=signature)
+                    cls.help_docs[name].parts = parse_doc(path, doc_text)
                 names.add(name)
             except:
                 utils_logger.print_exc(f"解析帮助文档 {path} 失败")
