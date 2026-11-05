@@ -1,6 +1,8 @@
 from ..utils import *
 from .common import *
 import threading
+from collections import deque
+from time import monotonic
 
 asset_config = Config('sekai.asset')
 ASSET_DEBUG_CFG = asset_config.item('debug')
@@ -772,18 +774,25 @@ class RegionRipAssetSource:
         elif self.name in DEFAULT_URL_MAP_METHODS:
             self.url_map_method = DEFAULT_URL_MAP_METHODS[self.name]
         self.prefixes = prefixes
+        self.failure_times = deque()
+        self.retry_at = 0.0
 
 class RegionRipAssetManger:
     """
     区服解包资源管理器
     使用 ```get(region)``` 方法获取对应区服的实例
     """
+    _FAILURE_WINDOW_SECONDS = 15 * 60
+    _FAILURE_LIMIT = 3
+    _COOLDOWN_SECONDS = 15 * 60
+
     _all_mgrs: dict[str, "RegionRipAssetManger"] = {}
     _img_cache_map: dict[str, Image.Image] = {}
 
     def __init__(self, region: str, sources: List[RegionRipAssetSource]):
         self.region = region
         self.sources = sources
+        self._preferred_source_index = 0
         self.cache_dir = pjoin(DEFAULT_RIP_ASSET_DIR, region)
         self.cached_images: Dict[str, Image.Image] = {}
         create_folder(self.cache_dir)
@@ -801,11 +810,53 @@ class RegionRipAssetManger:
             )
         return cls._all_mgrs[region]
 
+    def _record_source_failure(self, index: int, error: Exception):
+        # 仅将超时、连接异常和服务端暂时不可用计为源故障。
+        if not isinstance(error, (asyncio.TimeoutError, aiohttp.ClientError)):
+            return
+        if isinstance(error, aiohttp.ClientResponseError) and not (
+            error.status in (408, 429) or error.status >= 500
+        ):
+            return
+
+        source = self.sources[index]
+        now = monotonic()
+        # 忽略避让期间在途请求的晚到失败，避免不断延长避让时间。
+        if source.retry_at > now:
+            return
+        while source.failure_times and source.failure_times[0] < now - self._FAILURE_WINDOW_SECONDS:
+            source.failure_times.popleft()
+        source.failure_times.append(now)
+        if len(source.failure_times) < self._FAILURE_LIMIT:
+            return
+
+        source.failure_times.clear()
+        source.retry_at = now + self._COOLDOWN_SECONDS
+        if index == self._preferred_source_index:
+            next_index = (index + 1) % len(self.sources)
+            self._preferred_source_index = next_index
+            for offset in range(len(self.sources)):
+                candidate_index = (next_index + offset) % len(self.sources)
+                if self.sources[candidate_index].retry_at <= now:
+                    self._preferred_source_index = candidate_index
+                    break
+        preferred = self.sources[self._preferred_source_index]
+        logger.warning(
+            f"{self.region} 解包资源数据源 [{source.name}] 短时间多次失败，"
+            f"避让 {self._COOLDOWN_SECONDS} 秒，当前默认源 [{preferred.name}]"
+        )
+
     async def _download_data(self, url: str, timeout: int) -> bytes:
         async def do_download():
             async with get_client_session().get(url, verify_ssl=False) as resp:
                 if resp.status != 200:
-                    raise Exception(f"请求失败: {resp.status}")
+                    raise aiohttp.ClientResponseError(
+                        resp.request_info,
+                        resp.history,
+                        status=resp.status,
+                        message=f"请求失败: {resp.status}",
+                        headers=resp.headers,
+                    )
                 return await resp.read()
         if not timeout:
             return await do_download()
@@ -842,29 +893,36 @@ class RegionRipAssetManger:
             except:
                 pass
         
-        # 尝试从网络下载
+        # 每次请求从当前默认源开始，按配置顺序环绕尝试一次。
         error_list: List[Tuple[str, str]] = []
-        for source in self.sources:
+        start_index = self._preferred_source_index
+        for offset in range(len(self.sources)):
+            index = (start_index + offset) % len(self.sources)
+            source = self.sources[index]
             if source.prefixes and not any([path.startswith(prefix) for prefix in source.prefixes]):
                 continue
 
-            url = None
             try:
                 if not source.base_url.endswith("/"):
                     source.base_url += "/"
                 url = source.url_map_method(source.base_url + path)
+                if source.retry_at > monotonic():
+                    error_list.append((source.name, "数据源暂时避让，尚未到重试时间"))
+                    continue
                 data = await self._download_data(url, get_cfg_or_value(timeout))
-                if use_cache:
-                    create_parent_folder(cache_path)
-                    with open(cache_path, "wb") as f:
-                        f.write(data)
-                return data
-            
             except Exception as e:
-                e = get_exc_desc(e)
-                error_list.append((source.name, e))
-                # logger.print_exc(f"从数据源 [{source.name}] 获取 {self.region} 解包资源 {path} 失败: {e}, url={url}")
-                logger.warning(f"从数据源 [{source.name}] 获取 {self.region} 解包资源 {path} 失败: {e}, url={url}")
+                self._record_source_failure(index, e)
+                error = get_exc_desc(e)
+                error_list.append((source.name, error))
+                logger.warning(f"从数据源 [{source.name}] 获取 {self.region} 解包资源 {path} 失败: {error}")
+                continue
+
+            # 缓存写入失败属于本地异常，不计入远端源故障。
+            if use_cache:
+                create_parent_folder(cache_path)
+                with open(cache_path, "wb") as f:
+                    f.write(data)
+            return data
 
         if not allow_error:
             error_list_text = ""
@@ -901,37 +959,16 @@ class RegionRipAssetManger:
         except:
             pass
         
-        # 尝试从网络下载
-        error_list: List[Tuple[str, str]] = []
-        for source in self.sources:
-            if source.prefixes and not any([path.startswith(prefix) for prefix in source.prefixes]):
-                continue
-
-            url = None
-            try:
-                if not source.base_url.endswith("/"):
-                    source.base_url += "/"
-                url = source.url_map_method(source.base_url + path)
-                data = await self._download_data(url, get_cfg_or_value(timeout))
-                create_parent_folder(cache_path)
-                with open(cache_path, "wb") as f:
-                    f.write(data)
-                return cache_path
-            
-            except Exception as e:
-                e = get_exc_desc(e)
-                error_list.append((source.name, e))
-                # logger.print_exc(f"从数据源 [{source.name}] 获取 {self.region} 解包资源 {path} 失败: {e}, url={url}")
-                logger.warning(f"从数据源 [{source.name}] 获取 {self.region} 解包资源 {path} 失败: {e}, url={url}")
-
-        if not allow_error:
-            error_list_text = ""
-            for source_name, err in error_list:
-                error_list_text += f"[{source_name}] {truncate(err, 40)}\n"
-            raise Exception(f"从所有数据源获取 {self.region} 解包资源 {path} 失败:\n{error_list_text.strip()}")
-        
-        logger.warning(f"从所有数据源获取 {self.region} 解包资源 {path} 失败: {error_list}，返回默认值")
-        return default
+        # 所有下载入口共享源的故障统计、避让和缓存写入逻辑。
+        data = await self.get_asset(
+            path,
+            use_cache=True,
+            allow_error=allow_error,
+            default=None,
+            cache_expire_secs=cache_expire_secs,
+            timeout=timeout,
+        )
+        return default if data is None else cache_path
 
     async def img(
         self,

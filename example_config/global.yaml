@@ -114,13 +114,6 @@ exception_mail:   # 可选的异常邮件配置；真实凭据禁止写入 examp
 
 default_thread_pool_size: 4  # 通用线程池工作线程数；过大会增加内存与上下文切换
 
-safety_check:
-  enabled: false  # 是否在发送前调用腾讯云文本安全检查
-  secret_id: ""  # 只在真实 config 中填写
-  secret_key: "" # 只在真实 config 中填写
-  endpoint: ""# 腾讯云 IMS 服务端点
-
-
 plot:
   debug: false                    # 是否保存/输出绘图调试信息
   log_draw_time: false            # 是否打印布局和渲染耗时

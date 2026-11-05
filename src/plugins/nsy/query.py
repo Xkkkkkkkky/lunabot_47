@@ -1,4 +1,4 @@
-"""NSY 图库统计、图库缩略预览与按 PID 单图查询。"""
+"""NSY 图库统计、图库缩略预览与按 PID 查询图片。"""
 
 from __future__ import annotations
 
@@ -54,7 +54,8 @@ from . import (
     _get_image_temp_file,
     _inspect_image_file,
     _nsy_cmd,
-    _parse_one_arg,
+    _parse_many_args,
+    _send_original_image,
     _sha256_file,
     config,
     logger,
@@ -1464,30 +1465,35 @@ async def _(ctx: HandlerContext):
     )
 
 
-nsy_image_query = _nsy_cmd(['/查图'], force_whitespace=True)
+nsy_image_query = _nsy_cmd(['/查图'], force_whitespace=True, cooldown=False)
 
 
 @nsy_image_query.handle()
 async def _(ctx: HandlerContext):
-    pid_text = _parse_one_arg(ctx, '/查图 pid')
-    try:
-        pid = int(pid_text)
-    except ValueError:
-        raise ReplyException('pid 必须是整数')
-    if pid <= 0:
-        raise ReplyException('pid 必须是正整数')
+    pid_texts = _parse_many_args(ctx, '/查图 pid...')
+    pids = []
+    for pid_text in pid_texts:
+        try:
+            pid = int(pid_text)
+        except ValueError:
+            raise ReplyException('pid 必须是整数')
+        if pid <= 0:
+            raise ReplyException('pid 必须是正整数')
+        pids.append(pid)
 
-    await ctx.block(f'nsy:image-query:{pid}')
     manager = NsyManager.get()
-    image = manager.find_image(pid, raise_if_missing=True)
-    image_path = manager.get_image_path(image)
-    if not Path(image_path).is_file():
-        raise ReplyException(
-            f'图片 pid={image.pid} 的文件不存在，请联系管理员重载图库'
-        )
-    await ctx.asend_msg(
-        await get_image_cq(image_path, send_url_as_is=True)
-    )
+    image_paths = []
+    # 先校验全部图片再发送，避免请求出错时只发送一部分。
+    for pid in pids:
+        image = manager.find_image(pid, raise_if_missing=True)
+        image_path = manager.get_image_path(image)
+        if not Path(image_path).is_file():
+            raise ReplyException(
+                f'图片 pid={image.pid} 的文件不存在，请联系管理员重载图库'
+            )
+        image_paths.append(image_path)
+    for image_path in image_paths:
+        await _send_original_image(ctx.nonebot_handler, ctx.event, image_path)
 
 
 nsy_image_info = _nsy_cmd(['/查图信息'])

@@ -317,7 +317,10 @@ async def get_event_banner_chara_id(ctx: SekaiHandlerContext, event: dict) -> in
     banner_card_id = min([
         ec['cardId'] for ec in event_cards
         if "festival_limited" not in await get_card_supply_type(ctx, ec['cardId'])
-    ])
+    ], default=None)
+    # 无可用活动卡时，暂无法确定 ban 主，不能阻断其他活动查询。
+    if banner_card_id is None:
+        return None
     banner_card = await ctx.md.cards.find_by_id(banner_card_id)
     return banner_card['characterId']
 
@@ -1052,7 +1055,12 @@ async def compose_event_record_image(ctx: SekaiHandlerContext, qid: int) -> Imag
 # 查活动（单个/多个）
 MULTI_EVENT_CMDS = ["/pjsk events", "/pjsk_events", "/events", "/活动列表", "/活动一览",]
 SINGLE_EVENT_CMDS = ["/pjsk event", "/pjsk_event", "/event", "/活动", "/查活动",]
-pjsk_event = SekaiCmdHandler(SINGLE_EVENT_CMDS + MULTI_EVENT_CMDS, command_key='event.pjsk_event')
+# 活动查询的参数前必须有空白，避免“/活动组卡”被误匹配为“/活动”。
+pjsk_event = SekaiCmdHandler(
+    SINGLE_EVENT_CMDS + MULTI_EVENT_CMDS,
+    command_key='event.pjsk_event',
+    force_whitespace=True,
+)
 pjsk_event.check_cdrate(cd).check_wblist(gwl)
 @pjsk_event.handle()
 async def _(ctx: SekaiHandlerContext):

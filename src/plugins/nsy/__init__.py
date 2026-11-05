@@ -1,5 +1,7 @@
 from ..utils import *
 from nonebot import on_message
+from nonebot.rule import Rule, TrieRule
+from nonebot.typing import T_State
 import hashlib
 import struct
 import zlib
@@ -30,6 +32,29 @@ RANDOM_HISTORY_DB_KEY = 'random_image_history'
 file_db = get_file_db(STATE_DB_FILE, logger)
 cd = ColdDown(file_db, logger, cold_down_name='nsy')
 gbl = get_group_black_list(file_db, logger, 'nsy')
+
+_original_image_send_locks: dict[tuple[str, int], asyncio.Lock] = {}
+_original_image_next_send_at: dict[tuple[str, int], float] = {}
+
+
+async def _send_original_image(handler, event: MessageEvent, image_path: str):
+    """同群共享发送锁，原图发送结束后进入随机冷却。"""
+    key = (
+        ('group', int(event.group_id))
+        if is_group_msg(event) else ('private', int(event.user_id))
+    )
+    lock = _original_image_send_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        loop = asyncio.get_running_loop()
+        remaining = _original_image_next_send_at.get(key, 0) - loop.time()
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+        message = await get_image_cq(image_path, send_url_as_is=True)
+        try:
+            return await send_msg(handler, event, message, wait_rate_limit=True)
+        finally:
+            _original_image_next_send_at[key] = loop.time() + random.uniform(0.5, 1.5)
+
 
 IMAGE_EXT_BY_FORMAT = {
     'JPEG': '.jpg',
@@ -942,9 +967,9 @@ class NsyManager:
             pid=image.pid,
         )
 
-    def _refresh_all_image_features(self) -> bool:
+    def _refresh_image_features(self, images: list[NsyImage]) -> bool:
         """
-        从真实文件刷新全部 SHA-256、pHash、格式和分辨率。
+        从真实文件刷新指定图片的 SHA-256、pHash、格式和分辨率。
 
         `/图库查重` 会据此生成删除计划，因此不能只信任索引中
         格式合法但可能过期的 pHash。同一 inode 只读取和计算一次，
@@ -953,7 +978,7 @@ class NsyManager:
         feature_by_inode: dict[tuple[int, int], tuple[ImageInfo, str, str]] = {}
         changed = False
         errors = []
-        for image in sorted(self.images_by_pid.values(), key=lambda item: item.pid):
+        for image in sorted(images, key=lambda item: item.pid):
             path = self._image_path(image)
             if not osp.exists(path):
                 continue
@@ -1049,27 +1074,24 @@ class NsyManager:
         name_or_alias: str | None = None,
     ) -> tuple[str | None, list[SimilarityGroup]]:
         """
-        对所有图库图片执行全局 pHash 比较。
-
-        传入图库时仍会全局扫描，但只返回包含该图库图片的相似组；
-        组内的其他图库图片不会被截断，以便正确合并跨图库索引。
+        未指定图库时全局比较，指定时仅在该图库内部进行 pHash 比较。
         """
         filter_gallery = (
             self.resolve_gallery(name_or_alias, raise_if_missing=True)
             if name_or_alias is not None else None
         )
-        self._refresh_all_image_features()
+        # 在刷新特征和分组前限定候选集，避免图库外图片参与比较或影响保留项。
+        images = list(
+            self.images_by_gallery.get(filter_gallery, {}).values()
+            if filter_gallery is not None else self.images_by_pid.values()
+        )
+        self._refresh_image_features(images)
         features = [
             self._to_image_feature(image)
-            for image in self.images_by_pid.values()
+            for image in images
             if osp.exists(self._image_path(image)) and normalize_phash(image.phash) is not None
         ]
         groups = find_similarity_groups(features, _get_phash_distance_threshold())
-        if filter_gallery is not None:
-            groups = [
-                group for group in groups
-                if any(image.gallery == filter_gallery for image in group.images)
-            ]
         return filter_gallery, groups
 
     def build_global_dedup_plans(
@@ -1077,11 +1099,11 @@ class NsyManager:
         name_or_alias: str | None = None,
     ) -> tuple[str | None, list[GlobalDedupPlan]]:
         """
-        为全局相似组生成可执行去重计划。
+        为指定图库或全部图库的相似组生成可执行去重计划。
 
-        同图库相似图片只留下分辨率最高的图片，其余图片的所有
-        指向与被指向关系先归并到最高分辨率根图片再删除。跨图库
-        索引保留原 pid 和上传信息，但物理文件统一硬链接到全局根图片。
+        比较范围内，同图库相似图片只留下分辨率最高的图片；跨图库
+        索引保留原 pid 和上传信息，物理文件统一硬链接到组内根图片。
+        范围外已有硬链接的文件保留，仅在执行时修正关联索引。
         已经是标准硬链接结构的组不再重复报告。
         """
         filter_gallery, groups = self.find_global_similarity_groups(name_or_alias)
@@ -1453,11 +1475,11 @@ class NsyManager:
         plan: GlobalDedupPlan,
     ) -> tuple[list[NsyImage], list[NsyImage]]:
         """
-        执行一组全局去重计划，返回（删除索引，重建硬链接索引）。
+        执行一组去重计划，返回（删除索引，重建硬链接索引）。
 
-        同图库低分辨率图片的指向和被指向关系会先归并到根图片，
-        然后删除其文件与索引。跨图库保留索引的 pid、图库、上传者和
-        创建时间不变，文件内容元数据统一为最高分辨率根文件。
+        组内同图库低分辨率图片会删除文件与索引，跨图库保留索引的
+        pid、图库、上传者和创建时间不变，内容统一为最高分辨率根文件。
+        组外已有硬链接不改写文件，仅按实际 inode 修复关联索引。
         文件先移到同目录临时路径，硬链接
         和索引全部成功后才删除备份；中途失败时尽量原样回滚。
         """
@@ -1552,9 +1574,20 @@ class NsyManager:
                     f'去重失败: 目标文件 {records[pid].gallery}/{Path(target_path).name} 已存在'
                 )
 
+        # 图库外已有硬链接不参与去重，但删除其根时仍需修正索引；纳入快照以支持回滚。
+        related_records = dict(records)
+        for image in self.images_by_pid.values():
+            if image.pid in related_records:
+                continue
+            path = self._image_path(image)
+            if not osp.exists(path):
+                continue
+            stat = os.stat(path)
+            if (stat.st_dev, stat.st_ino) in actual_by_inode:
+                related_records[image.pid] = image
         snapshots = {
             pid: replace(image, linked_pids=list(image.linked_pids))
-            for pid, image in records.items()
+            for pid, image in related_records.items()
         }
         staged: list[tuple[int, str, str]] = []
         created_links: list[str] = []
@@ -1620,6 +1653,29 @@ class NsyManager:
                 image = records[pid]
                 self.images_by_gallery.get(image.gallery, {}).pop(pid, None)
                 self.images_by_pid.pop(pid, None)
+            # 依据处理后的真实 inode 修复关联索引，不改写组外图片文件。
+            components: dict[tuple[int, int], list[NsyImage]] = {}
+            for pid in related_records:
+                if pid in delete_pid_set:
+                    continue
+                image = self.images_by_pid[pid]
+                stat = os.stat(self._image_path(image))
+                components.setdefault((stat.st_dev, stat.st_ino), []).append(image)
+            for members in components.values():
+                # 优先保留去重根或仍然存在的原根，原根已删除时按 pid 稳定选根。
+                link_root = min(members, key=lambda image: (
+                    image.pid != root.pid,
+                    snapshots[image.pid].linked_to_pid is not None,
+                    image.pid,
+                ))
+                link_root.linked_to_pid = None
+                link_root.linked_pids = sorted(
+                    image.pid for image in members if image.pid != link_root.pid
+                )
+                for image in members:
+                    if image.pid != link_root.pid:
+                        image.linked_to_pid = link_root.pid
+                        image.linked_pids = []
             self._validate_hardlink_index()
             self._save_index()
         except Exception as e:
@@ -2174,6 +2230,7 @@ def _nsy_cmd(
     superuser: bool = False,
     priority: int = 0,
     force_whitespace: str | bool | None = None,
+    cooldown: bool = True,
 ) -> CmdHandler:
     handler = CmdHandler(
         commands,
@@ -2181,9 +2238,33 @@ def _nsy_cmd(
         priority=priority,
         force_whitespace=force_whitespace,
     )
-    handler.check_cdrate(cd).check_wblist(gbl)
+    if cooldown:
+        handler.check_cdrate(cd)
+    handler.check_wblist(gbl)
     if superuser:
         handler.check_superuser()
+    return handler
+
+
+def _nsy_upload_cmd(command: str) -> CmdHandler:
+    """仅在匹配副本中移除前置图片，原事件保留全部上传图片。"""
+    handler = _nsy_cmd([command])
+    command_rule = handler.handler.rule
+
+    async def match_upload_command(bot: Bot, event: MessageEvent, state: T_State) -> bool:
+        message = event.get_message()
+        for index, segment in enumerate(message):
+            if segment.type == 'image':
+                continue
+            if segment.type == 'text' and not str(segment).strip():
+                continue
+            command_event = event.model_copy(update={'message': message[index:]})
+            command_state = state.copy()
+            TrieRule.get_value(bot, command_event, command_state)
+            return await command_rule(bot, command_event, command_state)
+        return False
+
+    handler.handler.rule = Rule(match_upload_command)
     return handler
 
 
@@ -2347,14 +2428,14 @@ async def _handle_nsy_add(ctx: HandlerContext, force: bool = False):
     )
 
 
-nsy_add = _nsy_cmd(['/加图'])
+nsy_add = _nsy_upload_cmd('/加图')
 SILENT_ALLOWED_MATCHERS.add(nsy_add.handler)
 @nsy_add.handle()
 async def _(ctx: HandlerContext):
     await _handle_nsy_add(ctx)
 
 
-nsy_force_add = _nsy_cmd(['/强制加图'])
+nsy_force_add = _nsy_upload_cmd('/强制加图')
 @nsy_force_add.handle()
 async def _(ctx: HandlerContext):
     await _handle_nsy_add(ctx, force=True)
@@ -2407,7 +2488,7 @@ nsy_image_dedup = _nsy_cmd(['/图像去重', '/图库查重'], superuser=True)
 async def _(ctx: HandlerContext):
     args = ctx.get_args().strip().split()
     if len(args) > 1:
-        raise ReplyException('使用方式: /图像去重 或 /图库查重 [图库名称/别名]')
+        raise ReplyException('使用方式: /图像去重 [图库名称/别名] 或 /图库查重 [图库名称/别名]')
 
     manager = NsyManager.get()
     gallery_token = args[0] if args else None
@@ -2418,16 +2499,17 @@ async def _(ctx: HandlerContext):
         manager.build_global_dedup_plans,
         gallery_token,
     )
-    scope = f'图库“{filter_gallery}”相关的全局图片' if filter_gallery else '全部图库'
+    scope = f'图库“{filter_gallery}”内的图片' if filter_gallery else '全部图库'
     if not plans:
         return await ctx.asend_reply_msg(
             f'{scope}检查完成，未发现需要处理的相似图片'
             f'（Hamming distance 小于 {distance_threshold}）'
         )
 
+    dedup_scope = f'图库“{filter_gallery}”' if filter_gallery else '全局'
     report_pages = await render_similarity_report(
         [plan.group for plan in plans],
-        '全局图像去重检查',
+        f'{dedup_scope}图像去重检查',
     )
     delete_count = sum(len(plan.delete_pids) for plan in plans)
     relink_count = sum(len(plan.relink_pids) for plan in plans)
@@ -2470,14 +2552,14 @@ async def _(ctx: HandlerContext):
         _append_operation_log(
             new_ctx.event,
             (
-                f'pHash全局图像去重 filter_gallery={filter_gallery!r} '
+                f'pHash{dedup_scope}图像去重 filter_gallery={filter_gallery!r} '
                 f'selected_groups={selected_group_numbers} '
                 f'groups={completed_groups}/{len(selected_group_numbers)} removed={removed_pids} '
                 f'relinked={relinked_pids} skipped={skipped_errors}'
             ),
         )
         result_msg = (
-            f'全局图像去重完成 {completed_groups}/{len(selected_group_numbers)} 个已选组，'
+            f'{dedup_scope}图像去重完成 {completed_groups}/{len(selected_group_numbers)} 个已选组，'
             f'删除 {len(removed)} 张图片，'
             f'重建 {len(relinked)} 个链接'
         )
@@ -2631,21 +2713,19 @@ async def _(bot: Bot, event: MessageEvent):
         return
     if not check_send_msg_daily_limit(int(bot.self_id)) and not check_superuser(event):
         return
-    if not await cd.check(event):
-        return
-
     try:
         image = manager.random_image(gallery)
-        await send_msg(
+        ret = await _send_original_image(
             nsy_pick,
             event,
-            await get_image_cq(manager.get_image_path(image), send_url_as_is=True),
+            manager.get_image_path(image),
         )
-        try:
-            manager.record_random_image_sent(image)
-        except Exception:
-            # 图片已经发送成功，历史写入失败不应再向用户报告“发送图片失败”。
-            logger.print_exc(f'记录 NSY 图库"{gallery}"随机发送历史失败')
+        if ret:
+            try:
+                manager.record_random_image_sent(image)
+            except Exception:
+                # 图片已经发送成功，历史写入失败不应再向用户报告“发送图片失败”。
+                logger.print_exc(f'记录 NSY 图库"{gallery}"随机发送历史失败')
     except ReplyException as e:
         await send_reply_msg(nsy_pick, event, get_exc_desc(e))
     except Exception as e:

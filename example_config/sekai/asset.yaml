@@ -2,7 +2,7 @@
 debug: false
 default_masterdata_update_check_timeout: 3    # 默认MasterData数据源检查更新超时时间（秒）
 default_masterdata_download_timeout: 10       # 默认MasterData下载超时时间（秒）
-default_rip_asset_download_timeout: 60        # 默认解包资源下载超时时间（秒）
+default_rip_asset_download_timeout: 60        # 每个解包资源源的单次下载超时时间（秒）
 rip_img_cache_max_res: 256*256                # 解包资源图片缓存最大分辨率
 debug_log_img_cache: false                    # 是否启用解包资源图片缓存调试日志
 
@@ -17,8 +17,12 @@ jp:
 
   rip:  # 解包资源数据源
     sources:
-      # name 必须保持为 sekai.best；请在真实 config 中填写资源地址。
+      # 按列表顺序尝试，失败或超时后切换；请在真实 config 中填写资源地址。
       - name: "sekai.best"
+        base_url: ""
+      - name: "haruki"
+        base_url: ""
+      - name: "unipjsk"
         base_url: ""
 
 # 其他区服与日服使用相同字段；各区服的数据源地址只写在真实 config。

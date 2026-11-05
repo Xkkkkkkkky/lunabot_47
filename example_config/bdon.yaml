@@ -1,0 +1,21 @@
+# 将本文件复制到 config/bdon.yaml，填写真实地址；源码与示例不保存资源地址。
+enabled: false
+# Moenotes HK/MO/TW 服务器主数据目录（上游目录名为 hk-tw-mo）。
+masterdata_url: ""
+# Moenotes 素材服务根目录；读取繁体中文素材，绘制的文字使用简体中文。
+asset_url: ""
+asset_language: zh-Hant
+# Moenotes HK/MO/TW 服务器 music-data.json 与剧情站点根目录。
+music_meta_url: ""
+story_url: ""
+site_url: ""
+cache_seconds: 1800
+request_timeout: 45
+cd: 3
+story_summary:
+  # 在 llm/model_preset.yaml 内配置该预设，使用项目现有 LLM 服务。
+  model_preset: bdon_story_summary
+  timeout: 180
+  max_tokens: 1800
+  chapter_max_chars: 24000
+  output_max_chars: 2400

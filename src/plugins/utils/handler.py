@@ -555,11 +555,30 @@ class TempBotOrInternetFilePath:
 
 async def upload_group_file(bot: Bot, group_id: int, file_path: str, name: str, folder: str = '/') -> dict:
     """
-    上传群文件
+    上传群文件，沿用图片传输设置支持 Bot 与 NapCat 分机部署。
     """
+    file_path = os.path.abspath(file_path)
+    # 群文件沿用现有跨机传输配置，远端 Windows 路径不再做本机路径转换。
+    if get_image_transport_mode() == 'napcat_stream':
+        file_path = await upload_file_via_napcat_stream(
+            bot,
+            file_path,
+            chunk_size=int(global_config.get(
+                'msg_send.image_transport.napcat_stream.chunk_size',
+                64 * 1024,
+            )),
+            file_retention_ms=int(global_config.get(
+                'msg_send.image_transport.napcat_stream.file_retention_ms',
+                5 * 60 * 1000,
+            )),
+            verify_sha256=bool(global_config.get(
+                'msg_send.image_transport.napcat_stream.verify_sha256',
+                True,
+            )),
+        )
     return await bot.call_api('upload_group_file', **{
         'group_id': int(group_id),
-        'file': f'file://{os.path.abspath(file_path)}',
+        'file': f'file://{file_path}',
         'name': name,
         'folder': folder,
     })
@@ -1020,19 +1039,25 @@ def send_msg_func(func):
         group_id = arguments.get('group_id')
         if event is not None and is_group_msg(event):
             group_id = event.group_id
-        # 在准备图片和计数前退出，静默请求不占用其他群的发送额度。
-        if group_id is not None and check_group_silent(group_id):
-            return None
-        # 检查消息发送次数限制
-        cur_ts = int(datetime.now().timestamp())
         global _current_msg_count, _current_msg_second
-        if cur_ts != _current_msg_second:
-            _current_msg_count = 0
-            _current_msg_second = cur_ts
-        if _current_msg_count >= global_config.get('msg_send.rate_limit.second'):
-            utils_logger.warning(f'消息达到发送频率，取消消息发送')
-            return
-        _current_msg_count += 1
+        while True:
+            # 等待后也重新检查静默，静默请求不占用其他群的发送额度。
+            if group_id is not None and check_group_silent(group_id):
+                return None
+            now = datetime.now().timestamp()
+            cur_ts = int(now)
+            if cur_ts != _current_msg_second:
+                _current_msg_count = 0
+                _current_msg_second = cur_ts
+            if _current_msg_count < global_config.get('msg_send.rate_limit.second'):
+                # 检查和占用之间不 await，避免同一事件循环中的并发穿透。
+                _current_msg_count += 1
+                break
+            if not arguments.get('wait_rate_limit', False):
+                utils_logger.warning(f'消息达到发送频率，取消消息发送')
+                return
+            # 仅显式选择等待的发送请求在下一秒重新竞争额度。
+            await asyncio.sleep(cur_ts + 1 - now)
         
         try:
             ret = await func(*args, **kwargs)
@@ -1067,9 +1092,10 @@ def send_msg_func(func):
 # -------- event内发送 -------- #
 
 @send_msg_func
-async def send_msg(handler, event: MessageEvent, message: str):
+async def send_msg(handler, event: MessageEvent, message: str, *, wait_rate_limit: bool = False):
     """
     发送普通消息
+    wait_rate_limit=True 时达到秒额度会等待，由装饰器处理。
     """
     if check_group_disabled_by_event(event): return None
     bot = get_bot_by_self_id(event.self_id)

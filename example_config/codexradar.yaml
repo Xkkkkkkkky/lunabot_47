@@ -1,0 +1,10 @@
+# 从雷达站当前使用的公开接口填写地址；部署地址仅放在真实 config 中。
+binding_url: ""
+score_url: ""
+request_timeout_seconds: 40
+cache_seconds: 300
+
+draw:
+  # 留空时继承全局背景和群聊主题。
+  background_image: ""
+  theme: {}

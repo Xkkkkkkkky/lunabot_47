@@ -3,6 +3,7 @@ from nonebot.adapters.onebot.v11 import MessageEvent, GroupMessageEvent, Bot, Ev
 from datetime import datetime
 from ..utils import *
 from .sql import *
+from .export import BEIJING_TZ, EXPORT_USAGE, parse_export_args, export_chat_history
 
 config = Config('record')
 logger = get_logger("Record")
@@ -138,6 +139,42 @@ async def _(bot: Bot, event: MessageEvent):
     if not gwl.check(event, allow_private=True, allow_super=False): return
     await record_message(bot, event)
     
+
+
+# 导出当前群已保存的聊天记录
+export_record = CmdHandler(['/record'], logger)
+export_record.check_group().check_superuser().check_wblist(gwl)
+@export_record.handle()
+async def _(ctx: HandlerContext):
+    try:
+        # 唤醒 Bot 的 @ 不作为成员筛选；仍可通过文字 QQ 号指定 Bot。
+        at_user_ids = [user_id for user_id in ctx.get_at_qids() if user_id != int(ctx.bot.self_id)]
+    except ValueError as exc:
+        raise ReplyException(EXPORT_USAGE) from exc
+    try:
+        start_time, end_time, user_id = parse_export_args(ctx.get_args(), at_user_ids)
+    except ValueError as exc:
+        raise ReplyException(str(exc)) from exc
+
+    date_label = '全部'
+    if start_time is not None:
+        date_label = start_time.strftime('%Y-%m-%d')
+        last_date = (end_time - timedelta(days=1)).strftime('%Y-%m-%d')
+        if last_date != date_label:
+            date_label += f'_{last_date}'
+    member_label = '全体成员' if user_id is None else f'成员{user_id}'
+    name = f'聊天记录_{ctx.group_id}_{member_label}_{date_label}_{datetime.now(BEIJING_TZ):%Y%m%d%H%M%S}.txt'
+    await ctx.asend_reply_msg('正在导出已保存的聊天记录，请稍候')
+    with TempFilePath('txt') as tmp_path:
+        count = await run_in_pool(export_chat_history, DB_PATH, ctx.group_id, tmp_path, start_time, end_time, user_id)
+        empty_subject = '当前群' if user_id is None else '当前群的指定成员'
+        assert_and_reply(count > 0, f'{empty_subject}没有满足条件的已保存聊天记录')
+        try:
+            await upload_group_file(ctx.bot, ctx.group_id, tmp_path, name)
+        except Exception as exc:
+            logger.print_exc('聊天记录导出成功，但上传群文件失败')
+            raise ReplyException('导出成功，但上传群文件失败，请检查 Bot 的群文件上传权限和 NapCat 连接后重试') from exc
+    await ctx.asend_reply_msg(f'已上传 {count} 条聊天记录到群文件：{name}')
 
 
 # 检查消息

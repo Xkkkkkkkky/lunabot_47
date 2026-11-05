@@ -107,13 +107,8 @@ def _collect_events(feed: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(timeline, dict):
         next_schedule = timeline.get("nextSchedule")
         if isinstance(next_schedule, dict):
-            raw_schedule = next_schedule.get("schedule", next_schedule)
-            event = _validate_event(raw_schedule)
+            event = _validate_event(next_schedule)
             if event is not None:
-                event = dict(event)
-                window = next_schedule.get("window")
-                if isinstance(window, dict):
-                    event["_scheduleWindow"] = window
                 collected[_event_key(event)] = event
 
     return sorted(collected.values(), key=lambda item: item["announcedAt"])
@@ -128,18 +123,26 @@ def _format_time(value: str) -> str:
 
 
 def _format_event_time(event: dict[str, Any]) -> str:
-    if event["kind"] == "reset_scheduled":
-        window = event.get("_scheduleWindow")
+    if event["kind"] in {"reset_scheduled", "banked_reset"}:
+        # 上游 effectiveAt 可能只是窗口起点，因此优先读取完整的 scheduleWindow。
+        window = event.get("scheduleWindow")
         if isinstance(window, dict) and window.get("startAt"):
-            start = _format_time(window["startAt"])
+            start_time = _parse_time(window["startAt"])
+            start = start_time.strftime("%Y-%m-%d %H:%M")
             end_at = window.get("endAt")
-            if end_at and end_at != window["startAt"]:
-                return f"预计：{start}～{_format_time(end_at)}（北京时间）"
-            return f"预计：{start}（北京时间）"
+            if end_at:
+                end_time = _parse_time(end_at)
+                if end_time != start_time:
+                    end = end_time.strftime("%Y-%m-%d %H:%M")
+                    return f"预计生效：{start}～{end}（北京时间）"
+            return f"预计生效：{start}（北京时间）"
         if event.get("effectiveAt"):
-            return f'预计：{_format_time(event["effectiveAt"])}（北京时间）'
-    value = event.get("effectiveAt") or event["announcedAt"]
-    return f"时间：{_format_time(value)}（北京时间）"
+            return f'预计生效：{_format_time(event["effectiveAt"])}（北京时间）'
+        return f'预计生效：待定\n公告时间：{_format_time(event["announcedAt"])}（北京时间）'
+
+    if event.get("effectiveAt"):
+        return f'生效时间：{_format_time(event["effectiveAt"])}（北京时间）'
+    return f'公告时间：{_format_time(event["announcedAt"])}（北京时间）'
 
 
 def _scope_parts(event: dict[str, Any]) -> list[str]:
